@@ -23,18 +23,36 @@ logging.basicConfig(
     ]
 )
 
-# Silenciar logs HTTPX/HTTPCORE para no exponer las URLs con el token de Telegram
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("httpcore").setLevel(logging.WARNING)
+# Token del Bot de Telegram (Obtenido de variable de entorno o fallback)
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", os.getenv("TOKEN", "8145425963:AAEsR5z-k0FyWXh-QOlMFQ-p_eqXl22TZHA"))
+
+# Filtro de seguridad para ocultar el Token de Telegram y bloquear peticiones HTTP en logs
+class TokenMaskingFilter(logging.Filter):
+    def filter(self, record):
+        msg = str(record.msg)
+        if "api.telegram.org/bot" in msg or (TOKEN and TOKEN in msg):
+            if "HTTP Request:" in msg or "httpx" in record.name or "httpcore" in record.name:
+                return False
+            if TOKEN and TOKEN in msg:
+                record.msg = msg.replace(TOKEN, "[TOKEN_OCULTO]")
+        return True
+
+# Aplicar filtro de seguridad global a todos los loggers y handlers
+token_filter = TokenMaskingFilter()
+logging.getLogger().addFilter(token_filter)
+for handler in logging.getLogger().handlers:
+    handler.addFilter(token_filter)
+
+for log_name in ("httpx", "httpcore", "telegram", "telegram.ext", "urllib3"):
+    l = logging.getLogger(log_name)
+    l.setLevel(logging.WARNING)
+    l.addFilter(token_filter)
 
 logger = logging.getLogger(__name__)
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Registra en bot.log cualquier excepción no controlada que ocurra en el bot."""
     logger.error("Excepción ocurrida al procesar la actualización:", exc_info=context.error)
-
-# Token del Bot de Telegram (Obtenido de variable de entorno o fallback)
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", os.getenv("TOKEN", "8145425963:AAEsR5z-k0FyWXh-QOlMFQ-p_eqXl22TZHA"))
 
 # Estados de las conversaciones
 REGISTRO_TIPO = 1
