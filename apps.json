@@ -1,0 +1,14 @@
+{
+  "app_7967828114_1": {
+    "dev_id": "7967828114",
+    "dev_nombre": "C",
+    "link": "https://play.google.com/store/apps/test",
+    "descripcion": "esto es una prueba",
+    "estado": "reclutando",
+    "testers": [],
+    "min_testers": 12,
+    "max_testers": 15,
+    "dias_requeridos": 14,
+    "pruebas": {}
+  }
+}
