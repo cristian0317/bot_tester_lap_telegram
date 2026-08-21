@@ -110,7 +110,7 @@ def guardar_usuarios(datos):
         try:
             batch = db.batch()
             for user_id, user_data in datos.items():
-                doc_ref = db.collection("usuarios").doc(str(user_id))
+                doc_ref = db.collection("usuarios").document(str(user_id))
                 batch.set(doc_ref, user_data, merge=True)
             batch.commit()
         except Exception as e:
@@ -125,7 +125,7 @@ def guardar_usuario(user_id, user_data):
     db = _inicializar_firebase()
     if _firebase_initialized and db:
         try:
-            db.collection("usuarios").doc(str(user_id)).set(user_data, merge=True)
+            db.collection("usuarios").document(str(user_id)).set(user_data, merge=True)
         except Exception as e:
             logger.error(f"Error al guardar usuario {user_id} en Firebase: {e}")
 
@@ -153,7 +153,7 @@ def guardar_apps(datos):
         try:
             batch = db.batch()
             for app_id, app_data in datos.items():
-                doc_ref = db.collection("apps").doc(str(app_id))
+                doc_ref = db.collection("apps").document(str(app_id))
                 batch.set(doc_ref, app_data, merge=True)
             batch.commit()
         except Exception as e:
@@ -168,6 +168,6 @@ def guardar_app(app_id, app_data):
     db = _inicializar_firebase()
     if _firebase_initialized and db:
         try:
-            db.collection("apps").doc(str(app_id)).set(app_data, merge=True)
+            db.collection("apps").document(str(app_id)).set(app_data, merge=True)
         except Exception as e:
             logger.error(f"Error al guardar app {app_id} en Firebase: {e}")

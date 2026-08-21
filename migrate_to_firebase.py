@@ -29,7 +29,7 @@ def migrar():
             batch = db.batch()
             count = 0
             for user_id, user_data in usuarios.items():
-                doc_ref = db.collection("usuarios").doc(str(user_id))
+                doc_ref = db.collection("usuarios").document(str(user_id))
                 batch.set(doc_ref, user_data, merge=True)
                 count += 1
                 if count % 400 == 0:
@@ -53,7 +53,7 @@ def migrar():
             batch = db.batch()
             count = 0
             for app_id, app_data in apps.items():
-                doc_ref = db.collection("apps").doc(str(app_id))
+                doc_ref = db.collection("apps").document(str(app_id))
                 batch.set(doc_ref, app_data, merge=True)
                 count += 1
                 if count % 400 == 0:
