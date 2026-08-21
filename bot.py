@@ -22,6 +22,11 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+
+# Silenciar logs HTTPX/HTTPCORE para no exponer las URLs con el token de Telegram
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
