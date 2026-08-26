@@ -23,8 +23,8 @@ logging.basicConfig(
     ]
 )
 
-# Token del Bot de Telegram (Obtenido de variable de entorno o fallback)
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", os.getenv("TOKEN", "8145425963:AAEsR5z-k0FyWXh-QOlMFQ-p_eqXl22TZHA"))
+# Token del Bot de Telegram (Obtenido de variable de entorno)
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", os.getenv("TOKEN", ""))
 
 # Filtro de seguridad para ocultar el Token de Telegram y bloquear peticiones HTTP en logs
 class TokenMaskingFilter(logging.Filter):
