@@ -53,6 +53,8 @@ logger = logging.getLogger(__name__)
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Registra en bot.log cualquier excepción no controlada que ocurra en el bot."""
     logger.error("Excepción ocurrida al procesar la actualización:", exc_info=context.error)
+    if isinstance(context.error, db.ConflictoGuardado) and update and update.effective_message:
+        await update.effective_message.reply_text(str(context.error))
 
 # Estados de las conversaciones
 REGISTRO_TIPO = 1
@@ -64,6 +66,7 @@ CHECKIN_FOTO = 11
 # Rutas de los archivos JSON de almacenamiento
 USUARIOS_FILE = "usuarios.json"
 APPS_FILE = "apps.json"
+TESTERS_POR_CAMPANA = 12
 
 # IDs de administradores con permisos (Cargados desde variable de entorno ADMIN_IDS)
 _admin_ids_env = os.getenv("ADMIN_IDS", "7967828114")
@@ -285,8 +288,8 @@ async def subirapp_descripcion(update: Update, context: ContextTypes.DEFAULT_TYP
         "descripcion": descripcion_enviada,
         "estado": "reclutando",
         "testers": [],
-        "min_testers": 12,
-        "max_testers": 15,
+        "min_testers": TESTERS_POR_CAMPANA,
+        "max_testers": TESTERS_POR_CAMPANA,
         "dias_requeridos": 14,
         "pruebas": {}
     }
@@ -308,13 +311,14 @@ async def subirapp_descripcion(update: Update, context: ContextTypes.DEFAULT_TYP
 
 # --- VER APPS (BOTÓN "📱 Ver Apps") ---
 async def verapps(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Muestra la lista de aplicaciones en espera o reclutando testers."""
+    """Muestra campañas en reclutamiento con plazas activas disponibles."""
     user_id = str(update.message.from_user.id)
     apps = cargar_archivo(APPS_FILE)
 
     apps_disponibles = [
         (app_id, datos) for app_id, datos in apps.items()
-        if datos.get("estado") in ["reclutando", "lista"] and len(datos.get("testers", [])) < datos.get("max_testers", 15)
+        if datos.get("estado") == "reclutando"
+        and len(datos.get("testers", [])) < TESTERS_POR_CAMPANA
     ]
 
     if not apps_disponibles:
@@ -327,19 +331,12 @@ async def verapps(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    mensaje = "📱 **Lista de Espera de Apps para Testear**\n\n"
-    mensaje += "Súmate como tester a las campañas. Se necesitan al menos 12 testers para iniciar la prueba conjunta de 14 días:\n\n"
+    mensaje = "📱 **Apps disponibles para Testear**\n\n"
+    mensaje += "Cada campaña tiene 12 plazas activas. Al reunirlas, el desarrollador podrá iniciar la prueba conjunta de 14 días:\n\n"
 
     for app_id, datos in apps_disponibles:
         num_testers = len(datos.get("testers", []))
-        min_testers = datos.get("min_testers", 12)
-        max_testers = datos.get("max_testers", 15)
-        estado = datos.get("estado", "reclutando")
-
-        if estado == "reclutando":
-            indicador = f"🟡 **Reclutando:** `{num_testers}/{min_testers}` mínimos (*Faltan {min_testers - num_testers} testers*)"
-        else:
-            indicador = f"🟢 **¡Lista para Iniciar!** `{num_testers}/{max_testers}` testers inscritos"
+        indicador = f"🟡 **Reclutando:** `{num_testers}/{TESTERS_POR_CAMPANA}` inscritos (*Quedan {TESTERS_POR_CAMPANA - num_testers} plazas*)"
 
         mensaje += (
             f"🔹 **{datos.get('descripcion', 'Sin descripción')}**\n"
@@ -350,6 +347,52 @@ async def verapps(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     await update.message.reply_text(mensaje, reply_markup=obtener_teclado_principal(user_id), parse_mode="Markdown")
+
+# --- POSTULACIÓN DE TESTERS ---
+async def postular(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Inscribe a un usuario en las 12 plazas activas de una campaña."""
+    user_id = str(update.message.from_user.id)
+    teclado = obtener_teclado_principal(user_id)
+
+    if not context.args or len(context.args) != 1:
+        await update.message.reply_text(
+            "⚠️ Uso: /postular <app_id>\nPodés consultar el ID en 📱 Ver Apps.",
+            reply_markup=teclado
+        )
+        return
+
+    app_id = context.args[0]
+    try:
+        resultado = db.inscribir_tester(user_id, app_id)
+    except db.InscripcionRechazada as exc:
+        await update.message.reply_text(str(exc), reply_markup=teclado)
+        return
+    except db.ErrorPersistenciaInscripcion as exc:
+        logger.warning("No se pudo confirmar el guardado de la inscripción.")
+        await update.message.reply_text(str(exc), reply_markup=teclado)
+        return
+
+    completa = resultado["completa"]
+    mensaje = (
+        f"✅ Postulación aceptada en la campaña {app_id}.\n"
+        f"👥 Testers inscritos: {resultado['total']}/{TESTERS_POR_CAMPANA}.\n"
+    )
+    if completa:
+        mensaje += "La campaña ya reunió los 12 participantes necesarios y está lista para iniciar.\n"
+    mensaje += "Esperá el aviso de inicio del desarrollador antes de confirmar la instalación."
+    await update.message.reply_text(mensaje, reply_markup=teclado)
+
+    if completa:
+        try:
+            await context.bot.send_message(
+                chat_id=resultado["dev_id"],
+                text=(
+                    f"✅ La campaña {app_id} ya reunió los 12 testers necesarios.\n"
+                    f"La prueba todavía no ha iniciado. Podés iniciarla con /iniciarprueba {app_id}."
+                )
+            )
+        except Exception:
+            logger.warning("No se pudo notificar al desarrollador que su campaña reunió 12 testers.")
 
 # --- INICIAR PRUEBA (DESARROLLADOR) ---
 async def iniciarprueba(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -430,9 +473,33 @@ async def iniciarprueba(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 # --- CONFIRMACIÓN DE INSTALACIÓN ---
+def validar_confirmacion(user_id, app_id, usuarios, apps):
+    """Devuelve el motivo de rechazo sin modificar los datos consultados."""
+    if user_id not in usuarios:
+        return "❌ No estás registrado. Usá /start para registrarte primero."
+    if app_id not in apps:
+        return "❌ La campaña indicada no existe."
+    app = apps[app_id]
+    if app.get("estado") != "en_prueba":
+        return "❌ La campaña no está en prueba. Esperá a que el desarrollador la inicie."
+    en_testers = user_id in {str(tester_id) for tester_id in app.get("testers", [])}
+    en_usuario = app_id in usuarios[user_id].get("apps_testeando", [])
+    if en_testers != en_usuario:
+        return "❌ Tu inscripción es inconsistente entre la campaña y tu cuenta. Contactá al administrador; no se modificaron los datos."
+    if not en_testers:
+        return "❌ No estás inscrito en esta campaña."
+    pruebas = app.get("pruebas", {})
+    if user_id in pruebas:
+        if pruebas[user_id].get("estado") == "completada":
+            return "✅ Ya completaste esta prueba. Tu progreso se conserva y no se puede reiniciar la instalación."
+        return "ℹ️ Ya existe una prueba en curso para esta campaña. Tu progreso se conserva; usá /checkin para continuar."
+    return None
+
+
 async def confirmar_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inicia el proceso para recibir la captura de pantalla de instalación."""
     user_id = str(update.message.from_user.id)
+    context.user_data.pop("confirmar_app_id", None)
     usuarios = cargar_archivo(USUARIOS_FILE)
 
     if user_id not in usuarios:
@@ -442,7 +509,7 @@ async def confirmar_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     usuario = usuarios[user_id]
     apps_testeando = usuario.get("apps_testeando", [])
 
-    if not apps_testeando:
+    if not context.args and not apps_testeando:
         await update.message.reply_text(
             "❌ No estás postulado en ninguna app. Postulate primero en **📱 Ver Apps**.",
             reply_markup=obtener_teclado_principal(user_id),
@@ -452,15 +519,16 @@ async def confirmar_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if context.args:
         app_id = context.args[0]
-        if app_id not in apps_testeando:
-            await update.message.reply_text(f"❌ No estás postulado en la app `{app_id}`.", reply_markup=obtener_teclado_principal(user_id), parse_mode="Markdown")
-            return ConversationHandler.END
     else:
         app_id = apps_testeando[-1]
 
-    context.user_data["confirmar_app_id"] = app_id
     apps = cargar_archivo(APPS_FILE)
-    app_info = apps.get(app_id, {})
+    rechazo = validar_confirmacion(user_id, app_id, usuarios, apps)
+    if rechazo:
+        await update.message.reply_text(rechazo, reply_markup=obtener_teclado_principal(user_id))
+        return ConversationHandler.END
+    context.user_data["confirmar_app_id"] = app_id
+    app_info = apps[app_id]
 
     await update.message.reply_text(
         f"📸 **Confirmar Instalación de la App**\n\n"
@@ -476,20 +544,21 @@ async def confirmar_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recibe la captura de pantalla de instalación."""
     user_id = str(update.message.from_user.id)
     nombre = update.message.from_user.first_name
-    app_id = context.user_data.get("confirmar_app_id")
+    app_id = context.user_data.pop("confirmar_app_id", None)
 
     if not app_id:
         await update.message.reply_text("❌ Ocurrió un error.", reply_markup=obtener_teclado_principal(user_id))
         return ConversationHandler.END
 
-    foto_file_id = update.message.photo[-1].file_id
-    fecha_hoy = datetime.now().strftime("%Y-%m-%d")
-
+    usuarios = cargar_archivo(USUARIOS_FILE)
     apps = cargar_archivo(APPS_FILE)
-    if app_id not in apps:
-        await update.message.reply_text("❌ La app especificada no fue encontrada.", reply_markup=obtener_teclado_principal(user_id))
+    rechazo = validar_confirmacion(user_id, app_id, usuarios, apps)
+    if rechazo:
+        await update.message.reply_text(rechazo, reply_markup=obtener_teclado_principal(user_id))
         return ConversationHandler.END
 
+    foto_file_id = update.message.photo[-1].file_id
+    fecha_hoy = datetime.now().strftime("%Y-%m-%d")
     app = apps[app_id]
     if "pruebas" not in app:
         app["pruebas"] = {}
@@ -567,6 +636,11 @@ async def checkin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     app = apps[app_id]
     prueba = app.get("pruebas", {}).get(user_id, {})
 
+    if prueba.get("estado") == "completada":
+        context.user_data.pop("checkin_app_id", None)
+        await update.message.reply_text("✅ Ya completaste esta prueba. No necesitás realizar más check-ins; tu progreso se conserva.", reply_markup=obtener_teclado_principal(user_id))
+        return ConversationHandler.END
+
     if not prueba or prueba.get("estado") != "instalada":
         await update.message.reply_text("⚠️ Primero debes enviar tu captura inicial tocando el botón **📸 Confirmar Instalación**.", reply_markup=obtener_teclado_principal(user_id), parse_mode="Markdown")
         return ConversationHandler.END
@@ -607,30 +681,20 @@ async def checkin_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     foto_file_id = update.message.photo[-1].file_id
     fecha_hoy = datetime.now().strftime("%Y-%m-%d")
 
-    apps = cargar_archivo(APPS_FILE)
-    app = apps.get(app_id, {})
-    prueba = app.get("pruebas", {}).get(user_id, {})
-
-    if not prueba:
-        await update.message.reply_text("❌ Ocurrió un error con tu prueba.", reply_markup=obtener_teclado_principal(user_id))
+    try:
+        resultado = db.registrar_checkin(user_id, app_id, foto_file_id, fecha_hoy)
+    except db.ErrorRecompensa as exc:
+        await update.message.reply_text(str(exc), reply_markup=obtener_teclado_principal(user_id))
         return ConversationHandler.END
 
-    dias_actuales = prueba.get("dias_completados", 1) + 1
-    prueba["dias_completados"] = dias_actuales
-    prueba["ultimo_checkin"] = fecha_hoy
-    prueba["ultima_captura"] = foto_file_id
-    guardar_archivo(APPS_FILE, apps)
-
-    if dias_actuales >= 14 and prueba.get("estado") != "completada":
-        prueba["estado"] = "completada"
-        guardar_archivo(APPS_FILE, apps)
-
-        usuarios = cargar_archivo(USUARIOS_FILE)
-        if user_id in usuarios:
-            usuarios[user_id]["creditos"] = usuarios[user_id].get("creditos", 0) + 800
-            usuarios[user_id]["boletos_rifa"] = usuarios[user_id].get("boletos_rifa", 0) + 1
-            guardar_archivo(USUARIOS_FILE, usuarios)
-
+    if resultado["resultado"] in ("ya_pagada", "ya_registrado"):
+        mensaje = ("Esta prueba ya tiene su recompensa registrada. No se vuelve a acreditar."
+                   if resultado["resultado"] == "ya_pagada" else "Ya registraste el check-in de hoy.")
+        await update.message.reply_text(mensaje, reply_markup=obtener_teclado_principal(user_id))
+        return ConversationHandler.END
+    app = resultado
+    dias_actuales = resultado["dias"]
+    if resultado["resultado"] == "completada":
         await update.message.reply_text(
             f"🎉 **¡FELICITACIONES! HAS COMPLETADO LOS 14 DÍAS DE PRUEBA** 🏆\n\n"
             f"📱 **App:** {app.get('descripcion')}\n"
@@ -1121,6 +1185,7 @@ async def post_init(application: Application):
     comandos_publicos = [
         BotCommand("start", "Iniciar bot"),
         BotCommand("verapps", "Ver apps disponibles"),
+        BotCommand("postular", "Inscribirme como tester: /postular <app_id>"),
         BotCommand("miscreditos", "Ver mis créditos"),
         BotCommand("referidos", "Sistema de referidos"),
         BotCommand("rifa", "Rifa mensual"),
@@ -1204,6 +1269,7 @@ def main():
     # Handlers para Comandos y Botones Directos
     app.add_handler(CommandHandler("verapps", verapps))
     app.add_handler(MessageHandler(filters.Regex("^📱 Ver Apps$"), verapps))
+    app.add_handler(CommandHandler("postular", postular))
 
     app.add_handler(CommandHandler("miscreditos", miscreditos))
     app.add_handler(CommandHandler("creditos", miscreditos))
