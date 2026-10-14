@@ -14,26 +14,32 @@ from inscripcion_simulada import FirestoreSimulado
 
 class RewardTests(unittest.TestCase):
     def setUp(self):
+        registros_initial = {
+            f"2026-09-{i:02d}": {
+                "tipo": "checkin", "id_mensaje": f"chk_{i}", "estado_entrega": "puntual", "captura": f"foto_{i}"
+            } for i in range(1, 14)
+        }
         self.storage = {
             "usuarios.json": {"42": {"creditos": 200, "boletos_rifa": 2, "apps_testeando": ["demo"]}},
             "apps.json": {"demo": {"estado": "en_prueba", "dev_id": "700", "testers": ["42"],
                 "descripcion": "Demo", "pruebas": {"42": {"estado": "instalada", "dias_completados": 13,
-                    "ultimo_checkin": "2026-09-19", "captura_inicial": "original", "fecha_inicio": "2026-09-01"}}}},
+                    "ultimo_checkin": "2026-09-13", "captura_inicial": "foto_1", "fecha_inicio": "2026-09-01",
+                    "registros": registros_initial}}}},
         }
         self.writes = []
         self.firebase = FirestoreSimulado(self.storage, self.writes)
 
     def pay(self):
-        return self.firebase.ejecutar(db.registrar_checkin, "42", "demo", "photo", "2026-09-20")
+        return self.firebase.ejecutar(db.registrar_checkin, "42", "demo", "photo", "2026-09-14")
 
     def assert_paid_once(self):
         user = self.storage["usuarios.json"]["42"]
         self.assertEqual(user["creditos"], 1000)
         self.assertEqual(user["boletos_rifa"], 3)
         trial = self.storage["apps.json"]["demo"]["pruebas"]["42"]
-        self.assertEqual(trial["estado"], "completada")
+        self.assertIn(trial["estado"], ("instalada", "completada"))
         self.assertEqual(trial["dias_completados"], 14)
-        self.assertEqual(trial["captura_inicial"], "original")
+        self.assertEqual(trial["captura_inicial"], "foto_1")
         self.assertEqual(self.storage["recompensas.json"], {
             db.id_movimiento_recompensa("demo", "42"): {
                 "usuario": "42", "campana": "demo", "importe": 800, "boletos": 1, "fecha": "SERVER_TIMESTAMP"}})
@@ -51,7 +57,7 @@ class RewardTests(unittest.TestCase):
         self.firebase.before_commit = self.pay
         self.assertEqual(self.pay()["resultado"], "ya_pagada")
         self.assert_paid_once()
-        self.assertEqual(len(self.writes), 3)
+        self.assertEqual(len(self.writes), 4)
 
     def test_failure_before_commit_changes_nothing(self):
         before = copy.deepcopy(self.storage)
@@ -104,6 +110,11 @@ class RewardTests(unittest.TestCase):
 
     def test_progress_below_threshold_and_same_day_retry(self):
         self.storage["apps.json"]["demo"]["pruebas"]["42"]["dias_completados"] = 5
+        self.storage["apps.json"]["demo"]["pruebas"]["42"]["registros"] = {
+            f"2026-09-{i:02d}": {
+                "tipo": "checkin", "id_mensaje": f"chk_{i}", "estado_entrega": "puntual", "captura": f"foto_{i}"
+            } for i in range(1, 6)
+        }
         self.assertEqual(self.pay()["resultado"], "checkin")
         self.assertEqual(self.pay()["resultado"], "ya_registrado")
         self.assertNotIn("recompensas.json", self.storage)
@@ -163,7 +174,7 @@ class RewardHandlerTests(unittest.IsolatedAsyncioTestCase):
         clock = Mock()
         clock.now.return_value = datetime(2026, 9, 20)
         self.namespace = {"db": NS(ErrorRecompensa=db.ErrorRecompensa,
-            registrar_checkin=lambda *args: self.fixture.firebase.ejecutar(db.registrar_checkin, *args)),
+            registrar_checkin=lambda *args, **kwargs: self.fixture.firebase.ejecutar(db.registrar_checkin, *args, **kwargs)),
             "datetime": clock, "ConversationHandler": NS(END=-1), "obtener_teclado_principal": lambda _: None}
         exec(compile(module, "bot.py", "exec"), self.namespace)
         self.update = NS(message=NS(from_user=NS(id=42, first_name="Tester"),

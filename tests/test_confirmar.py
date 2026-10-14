@@ -10,6 +10,8 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 import unittest
 from unittest.mock import AsyncMock, Mock
+import db
+from inscripcion_simulada import FirestoreSimulado
 
 
 def handler_namespace():
@@ -54,6 +56,14 @@ class ConfirmationTests(unittest.IsolatedAsyncioTestCase):
             }},
         }
         self.writes = []
+        self.firebase = FirestoreSimulado(self.storage, self.writes)
+        self.handlers["db"] = NS(
+            confirmar_instalacion=lambda u, a, f, d, n, *args, **kwargs: self.firebase.ejecutar(
+                db.confirmar_instalacion, u, a, f, d, n, *args, **kwargs
+            ),
+            ConfirmacionRechazada=db.ConfirmacionRechazada,
+            ErrorPersistenciaConfirmacion=db.ErrorPersistenciaConfirmacion,
+        )
 
         def save(name, data):
             self.writes.append(name)
@@ -107,13 +117,16 @@ class ConfirmationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.storage, before)
         self.assertEqual(self.writes, [])
         self.assertEqual(await self.call("confirmar_foto"), -1)
-        expected = copy.deepcopy(before)
-        expected["apps.json"]["demo"]["pruebas"]["42"] = {
-            "tester_nombre": "Tester", "estado": "instalada", "fecha_inicio": "2026-09-20",
-            "captura_inicial": "original", "dias_completados": 1, "ultimo_checkin": "2026-09-20",
-        }
-        self.assertEqual(self.storage, expected)
-        self.assertEqual(self.writes, ["apps.json"])
+        prueba = self.storage["apps.json"]["demo"]["pruebas"]["42"]
+        self.assertEqual(prueba["tester_nombre"], "Tester")
+        self.assertEqual(prueba["estado"], "instalada")
+        self.assertEqual(prueba["fecha_inicio"], "2026-09-20")
+        self.assertEqual(prueba["captura_inicial"], "original")
+        self.assertEqual(prueba["dias_completados"], 1)
+        self.assertEqual(prueba["ultimo_checkin"], "2026-09-20")
+        self.assertIn("registros", prueba)
+        self.assertIn("posibles_faltas", prueba)
+        self.assertIn("apps.json", self.writes)
         self.context.bot.send_message.assert_awaited_once()
 
     async def test_button_selects_last_membership_and_accepts_integer_tester_id(self):

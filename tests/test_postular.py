@@ -59,7 +59,7 @@ class RegistrationTests(unittest.IsolatedAsyncioTestCase):
             self.app_id: {
                 "dev_id": "700", "descripcion": "Piloto", "link": "https://example.invalid",
                 "estado": "reclutando", "testers": [], "min_testers": 12,
-                "max_testers": 15, "dias_requeridos": 14, "pruebas": {},
+                "max_testers": 12, "dias_requeridos": 14, "pruebas": {},
             }
         }
         self.storage = {"usuarios.json": self.users, "apps.json": self.apps}

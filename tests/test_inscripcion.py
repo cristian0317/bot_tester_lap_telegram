@@ -5,6 +5,7 @@ import db
 import test_postular as registration
 
 
+
 class PersistenceTests(unittest.IsolatedAsyncioTestCase):
     setUp = registration.RegistrationTests.setUp
     reset_fixture = registration.RegistrationTests.reset_fixture
