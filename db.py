@@ -302,6 +302,7 @@ def _checkin_transaccional(transaction, user_ref, app_ref, movimiento_ref,
                 posibles_faltas[target_vencimiento] = falta_entry
                 prueba["posibles_faltas"] = posibles_faltas
 
+        es_campana_beta = bool(app.get("es_beta") or app.get("tipo_campana") == "beta_gratuita")
         transaction.update(app_ref, {"pruebas": app["pruebas"]})
         return {
             "resultado": "actualizado",
@@ -309,7 +310,8 @@ def _checkin_transaccional(transaction, user_ref, app_ref, movimiento_ref,
             "estado_entrega": reg_existente.get("estado_entrega"),
             "fecha_vencimiento": target_vencimiento,
             "descripcion": app.get("descripcion"),
-            "dev_id": app.get("dev_id")
+            "dev_id": app.get("dev_id"),
+            "es_beta": es_campana_beta
         }
 
     estado_entrega = evaluar_puntualidad_entrega(tg_dt, target_vencimiento)
@@ -344,10 +346,11 @@ def _checkin_transaccional(transaction, user_ref, app_ref, movimiento_ref,
     prueba["ultima_captura"] = captura
     prueba["estado"] = "instalada"  # Conserva estado operativo para seguir entregando
 
+    es_campana_beta = bool(app.get("es_beta") or app.get("tipo_campana") == "beta_gratuita")
     tiene_faltas_pendientes = any(f.get("estado") == "pendiente_revision" for f in posibles_faltas.values())
     tiene_entregas_tardias = any(r.get("estado_entrega") == "tardio" for r in registros.values())
     tiene_legacy = bool(prueba.get("requiere_conciliacion_legacy")) or bool(prueba.get("incertidumbre_progreso_legacy"))
-    req_conciliacion = bool(prueba.get("requiere_conciliacion")) or tiene_legacy or tiene_faltas_pendientes or tiene_entregas_tardias
+    req_conciliacion = bool(prueba.get("requiere_conciliacion")) or tiene_legacy or tiene_faltas_pendientes or tiene_entregas_tardias or es_campana_beta
     if req_conciliacion:
         prueba["requiere_conciliacion"] = True
 
@@ -372,7 +375,8 @@ def _checkin_transaccional(transaction, user_ref, app_ref, movimiento_ref,
         "fecha_vencimiento": target_vencimiento,
         "requiere_conciliacion": req_conciliacion,
         "descripcion": app.get("descripcion"),
-        "dev_id": app.get("dev_id")
+        "dev_id": app.get("dev_id"),
+        "es_beta": es_campana_beta
     }
 
 
@@ -397,6 +401,15 @@ def registrar_checkin(user_id, app_id, captura, fecha, id_mensaje=None, telegram
     except Exception as exc:
         raise ErrorRecompensa("No se pudo confirmar el guardado. Reintentá: un movimiento ya guardado no se paga nuevamente.") from exc
 
+def es_beta_gratuita():
+    """Indica si el sistema opera en modo Beta Gratuita Comunitaria & Founders (Etapa 6A)."""
+    val = os.getenv("BETA_GRATUITA", "false")
+    return str(val).strip().lower() in ("true", "1", "yes", "si", "t")
+
+
+PUNTOS_FOUNDER_DEFECTO = 100
+
+
 class PublicacionRechazada(Exception):
     """La publicación no cumple las reglas; no se debe escribir nada."""
 
@@ -412,7 +425,12 @@ def _publicar_transaccional(transaction, user_ref, app_ref, user_id, app_id, dev
         if (app_dict.get("dev_id") == user_id and
             app_dict.get("link") == app_link and
             app_dict.get("descripcion") == descripcion):
-            return {"resultado": "ya_publicada", "app_id": app_id, "descripcion": descripcion}
+            return {
+                "resultado": "ya_publicada",
+                "app_id": app_id,
+                "descripcion": descripcion,
+                "es_beta": app_dict.get("es_beta", False)
+            }
         raise PublicacionRechazada("❌ Conflicto de publicación: el ID de campaña ya existe con otro contenido o propietario.")
 
     user_snap = user_ref.get(transaction=transaction)
@@ -421,13 +439,47 @@ def _publicar_transaccional(transaction, user_ref, app_ref, user_id, app_id, dev
 
     usuario = user_snap.to_dict()
     creditos = usuario.get("creditos", 0)
-    if creditos < 800:
-        raise PublicacionRechazada(f"❌ Créditos insuficientes: tenés {creditos} de 800 requeridos para publicar.")
 
-    transaction.update(user_ref, {
-        "creditos": creditos - 800,
-        "boletos_rifa": usuario.get("boletos_rifa", 0) + 1
-    })
+    modo_beta = es_beta_gratuita()
+
+    if not modo_beta:
+        if creditos < 800:
+            raise PublicacionRechazada(f"❌ Créditos insuficientes: tenés {creditos} de 800 requeridos para publicar.")
+
+        transaction.update(user_ref, {
+            "creditos": creditos - 800,
+            "boletos_rifa": usuario.get("boletos_rifa", 0) + 1
+        })
+    else:
+        # Durante la beta gratuita se permite como máximo 1 campaña activa por desarrollador
+        # (en estado 'reclutando' o 'en_prueba').
+        campana_activa_id = usuario.get("campana_activa_id")
+        client = getattr(app_ref, "client", None) or getattr(user_ref, "client", None)
+        if campana_activa_id and str(campana_activa_id) != str(app_id) and client:
+            try:
+                activa_doc_ref = client.collection("apps").document(str(campana_activa_id))
+                act_snap = activa_doc_ref.get(transaction=transaction)
+                if act_snap.exists:
+                    act_data = act_snap.to_dict() or {}
+                    if act_data.get("estado") in ["reclutando", "en_prueba"]:
+                        desc_act = act_data.get("descripcion", campana_activa_id)
+                        raise PublicacionRechazada(
+                            f"❌ Límite de la Beta: ya tenés una campaña activa en curso ({desc_act}). "
+                            f"Durante la beta gratuita se permite un máximo de 1 campaña activa por desarrollador."
+                        )
+            except PublicacionRechazada:
+                raise
+            except Exception:
+                pass
+
+        # En modo Beta Gratuita no se cobran los 800 créditos ni dinero.
+        # Los créditos existentes no se eliminan ni se sobrescriben.
+        reputacion = usuario.get("reputacion") or {}
+        reputacion["campanas_publicadas"] = reputacion.get("campanas_publicadas", 0) + 1
+        transaction.update(user_ref, {
+            "reputacion": reputacion,
+            "campana_activa_id": str(app_id)
+        })
 
     nueva_campana = {
         "dev_id": user_id,
@@ -439,10 +491,19 @@ def _publicar_transaccional(transaction, user_ref, app_ref, user_id, app_id, dev
         "min_testers": 15,
         "max_testers": 15,
         "dias_requeridos": 14,
-        "pruebas": {}
+        "pruebas": {},
+        "es_beta": modo_beta,
+        "tipo_campana": "beta_gratuita" if modo_beta else "estandar",
+        "puntos_founder_recompensa": PUNTOS_FOUNDER_DEFECTO if modo_beta else 0
     }
     transaction.create(app_ref, nueva_campana)
-    return {"resultado": "creada", "app_id": app_id, "descripcion": descripcion}
+    return {
+        "resultado": "creada",
+        "app_id": app_id,
+        "descripcion": descripcion,
+        "es_beta": modo_beta,
+        "costo_creditos": 0 if modo_beta else 800
+    }
 
 
 def publicar_campana(user_id, dev_nombre, app_link, descripcion, app_id):
@@ -2094,14 +2155,18 @@ def _liquidar_recompensa_transaccional(
 
     if mov_snap.exists or (prueba and prueba.get("recompensa_liquidada") is True):
         dias_audit = prueba.get("dias_completados", 14) if prueba else 14
+        es_beta = bool(app.get("es_beta") or app.get("tipo_campana") == "beta_gratuita")
+        puntos_f = int(app.get("puntos_founder_recompensa", PUNTOS_FOUNDER_DEFECTO)) if es_beta else 0
         return {
             "exito": True,
             "resultado": "ya_liquidada",
             "motivo": "ya_pagada",
             "app_id": app_id_str,
             "user_id": user_id_str,
-            "importe": 800,
-            "boletos": 1,
+            "es_beta": es_beta,
+            "importe": 0 if es_beta else 800,
+            "boletos": 0 if es_beta else 1,
+            "puntos_founder": puntos_f,
             "dias_auditados": dias_audit,
             "id_movimiento": str(movimiento_ref.id)
         }
@@ -2144,16 +2209,65 @@ def _liquidar_recompensa_transaccional(
     dt_now = parse_dt_mexico(now_dt)
     fecha_iso = dt_now.isoformat()
 
-    transaction.update(user_ref, {
-        "creditos": usuario.get("creditos", 0) + 800,
-        "boletos_rifa": usuario.get("boletos_rifa", 0) + 1
+    es_campana_beta = bool(app.get("es_beta") or app.get("tipo_campana") == "beta_gratuita")
+    puntos_founder = int(app.get("puntos_founder_recompensa", PUNTOS_FOUNDER_DEFECTO)) if es_campana_beta else 0
+    importe_creditos = 0 if es_campana_beta else 800
+    boletos_otorgados = 0 if es_campana_beta else 1
+
+    # Actualización y consolidación de Reputación Permanente
+    reputacion = copy.deepcopy(usuario.get("reputacion") or {})
+    campanas_completadas = reputacion.get("campanas_completadas", 0) + 1
+    dias_totales = reputacion.get("dias_totales_cumplidos", 0) + dias_validos
+
+    faltas_injust_actual = 0
+    for f in posibles_faltas.values():
+        if f.get("estado_resolucion") == "injustificada" or f.get("estado") == "injustificada":
+            faltas_injust_actual += 1
+    faltas_injust_total = reputacion.get("faltas_injustificadas", 0) + faltas_injust_actual
+
+    total_evaluado = campanas_completadas * 14
+    cumplimiento_ratio = max(0.0, min(1.0, (total_evaluado - faltas_injust_total) / total_evaluado)) if total_evaluado > 0 else 1.0
+    confiabilidad_pct = round(cumplimiento_ratio * 100, 1)
+
+    if confiabilidad_pct >= 95.0:
+        nivel_confiabilidad = "Excelente"
+    elif confiabilidad_pct >= 80.0:
+        nivel_confiabilidad = "Alta"
+    elif confiabilidad_pct >= 60.0:
+        nivel_confiabilidad = "Media"
+    else:
+        nivel_confiabilidad = "Baja"
+
+    reputacion.update({
+        "campanas_completadas": campanas_completadas,
+        "dias_totales_cumplidos": dias_totales,
+        "faltas_injustificadas": faltas_injust_total,
+        "confiabilidad_pct": confiabilidad_pct,
+        "nivel_confiabilidad": nivel_confiabilidad,
+        "ultima_actualizacion": fecha_iso
     })
+
+    user_updates = {
+        "reputacion": reputacion
+    }
+    if es_campana_beta:
+        # En campañas beta se otorgan Puntos Founder independientes sin alterar créditos ni boletos
+        user_updates["puntos_founder"] = usuario.get("puntos_founder", 0) + puntos_founder
+    else:
+        # En campañas estándar se conservan exactamente los 800 créditos y 1 boleto
+        user_updates["creditos"] = usuario.get("creditos", 0) + 800
+        user_updates["boletos_rifa"] = usuario.get("boletos_rifa", 0) + 1
+
+    transaction.update(user_ref, user_updates)
 
     recompensa_doc = {
         "usuario": user_id_str,
         "campana": app_id_str,
-        "importe": 800,
-        "boletos": 1,
+        "es_beta": es_campana_beta,
+        "tipo_recompensa": "founder" if es_campana_beta else "estandar",
+        "importe": importe_creditos,
+        "boletos": boletos_otorgados,
+        "puntos_founder": puntos_founder,
         "fecha": server_timestamp,
         "estado": "liquidada",
         "motivo": "cumplimiento_14_dias",
@@ -2177,8 +2291,10 @@ def _liquidar_recompensa_transaccional(
         "resultado": "liquidada",
         "app_id": app_id_str,
         "user_id": user_id_str,
-        "importe": 800,
-        "boletos": 1,
+        "es_beta": es_campana_beta,
+        "importe": importe_creditos,
+        "boletos": boletos_otorgados,
+        "puntos_founder": puntos_founder,
         "dias_auditados": dias_validos,
         "fecha_liquidacion": fecha_iso,
         "id_movimiento": str(movimiento_ref.id)
@@ -2324,7 +2440,8 @@ def obtener_resumen_conciliacion_campana(app_id, cliente=None):
         "con_apelaciones_pendientes": con_apelaciones_pendientes,
         "requieren_conciliacion_legacy": requieren_conciliacion_legacy,
         "expulsados": expulsados,
-        "en_progreso": en_progreso
+        "en_progreso": en_progreso,
+        "es_beta": bool(app.get("es_beta") or app.get("tipo_campana") == "beta_gratuita")
     }
 
 
@@ -2543,4 +2660,151 @@ def cerrar_campana_definitiva(app_id, actor_id, motivo=None, now_dt=None, id_sol
         now_dt,
         id_solicitud
     )
+
+
+# --- REPUTACIÓN PERMANENTE Y PROGRAMA FOUNDER (ETAPA 6A) ---
+
+def obtener_reputacion_tester(user_id, cliente=None):
+    """
+    Recupera los datos consolidados de reputación permanente y puntos founder de un usuario.
+    """
+    if cliente is None and _firebase_configurado():
+        cliente = _inicializar_firebase()
+
+    user_data = None
+    if cliente and _firebase_initialized:
+        doc = cliente.collection("usuarios").document(str(user_id)).get()
+        if doc.exists:
+            user_data = doc.to_dict()
+    else:
+        usuarios = _cargar_json_local(USUARIOS_FILE)
+        user_data = usuarios.get(str(user_id))
+
+    if not user_data:
+        return {
+            "encontrado": False,
+            "puntos_founder": 0,
+            "nivel_confiabilidad": "Nuevo",
+            "confiabilidad_pct": 100.0,
+            "campanas_completadas": 0,
+            "dias_totales_cumplidos": 0,
+            "faltas_injustificadas": 0
+        }
+
+    rep = user_data.get("reputacion") or {}
+    return {
+        "encontrado": True,
+        "usuario": str(user_id),
+        "nombre": user_data.get("nombre", ""),
+        "puntos_founder": user_data.get("puntos_founder", 0),
+        "nivel_confiabilidad": rep.get("nivel_confiabilidad", "Inicial"),
+        "confiabilidad_pct": rep.get("confiabilidad_pct", 100.0),
+        "campanas_completadas": rep.get("campanas_completadas", 0),
+        "dias_totales_cumplidos": rep.get("dias_totales_cumplidos", 0),
+        "faltas_injustificadas": rep.get("faltas_injustificadas", 0),
+        "ultima_actualizacion": rep.get("ultima_actualizacion")
+    }
+
+
+def formatear_reputacion(usuario):
+    """
+    Genera el formato legible de reputación permanente para visualización en el bot.
+    """
+    rep = (usuario or {}).get("reputacion") or {}
+    nivel = rep.get("nivel_confiabilidad", "Inicial")
+    conf_pct = rep.get("confiabilidad_pct", 100.0)
+    completadas = rep.get("campanas_completadas", 0)
+    dias = rep.get("dias_totales_cumplidos", 0)
+    faltas = rep.get("faltas_injustificadas", 0)
+
+    estrellas = "⭐⭐⭐⭐⭐" if nivel == "Excelente" else (
+        "⭐⭐⭐⭐" if nivel == "Alta" else (
+            "⭐⭐⭐" if nivel == "Media" else "⭐"
+        )
+    ) if completadas > 0 else "🌱 (Nuevo)"
+
+    return (
+        f"{estrellas} **{nivel}** (`{conf_pct}%` confiabilidad)\n"
+        f"🏆 Campañas completadas: `{completadas}` | 📅 Días cumplidos: `{dias}` | ⚠️ Faltas: `{faltas}`"
+    )
+
+
+def _actualizar_creditos_admin_transaccional(transaction, user_ref, delta_creditos):
+    user_snap = user_ref.get(transaction=transaction)
+    if not user_snap.exists:
+        return None
+    data = user_snap.to_dict() or {}
+    nuevo_saldo = max(0, int(data.get("creditos", 0)) + delta_creditos)
+    transaction.update(user_ref, {"creditos": nuevo_saldo})
+    data["creditos"] = nuevo_saldo
+    return data
+
+
+def actualizar_creditos_admin_seguro(target_user_id, delta_creditos):
+    """
+    Actualiza de forma atómica y segura los créditos de un único usuario.
+    Evita sobrescribir colecciones completas para mitigar riesgos de concurrencia.
+    """
+    target_id_str = str(target_user_id)
+    cliente = _inicializar_firebase() if _firebase_configurado() else None
+    if cliente and _firebase_initialized:
+        from firebase_admin import firestore
+        user_ref = cliente.collection("usuarios").document(target_id_str)
+        return firestore.transactional(_actualizar_creditos_admin_transaccional)(
+            cliente.transaction(), user_ref, delta_creditos
+        )
+    else:
+        usuarios = _cargar_json_local(USUARIOS_FILE)
+        if target_id_str not in usuarios:
+            return None
+        usuarios[target_id_str]["creditos"] = max(0, int(usuarios[target_id_str].get("creditos", 0)) + delta_creditos)
+        _guardar_json_local(USUARIOS_FILE, usuarios)
+        return usuarios[target_id_str]
+
+
+def _sancionar_usuario_admin_transaccional(transaction, user_ref, tipo_sancion, cantidad):
+    user_snap = user_ref.get(transaction=transaction)
+    if not user_snap.exists:
+        return None
+    data = user_snap.to_dict() or {}
+    if tipo_sancion == "creditos":
+        data["creditos"] = max(0, int(data.get("creditos", 0)) - cantidad)
+        transaction.update(user_ref, {"creditos": data["creditos"]})
+    elif tipo_sancion == "boletos":
+        data["boletos_rifa"] = max(0, int(data.get("boletos_rifa", 0)) - cantidad)
+        transaction.update(user_ref, {"boletos_rifa": data["boletos_rifa"]})
+    elif tipo_sancion == "resetear":
+        data["creditos"] = 0
+        data["boletos_rifa"] = 0
+        transaction.update(user_ref, {"creditos": 0, "boletos_rifa": 0})
+    return data
+
+
+def sancionar_usuario_admin_seguro(target_user_id, tipo_sancion, cantidad=0):
+    """
+    Aplica sanciones numéricas de forma atómica sobre un único documento de usuario.
+    """
+    target_id_str = str(target_user_id)
+    cliente = _inicializar_firebase() if _firebase_configurado() else None
+    if cliente and _firebase_initialized:
+        from firebase_admin import firestore
+        user_ref = cliente.collection("usuarios").document(target_id_str)
+        return firestore.transactional(_sancionar_usuario_admin_transaccional)(
+            cliente.transaction(), user_ref, tipo_sancion, cantidad
+        )
+    else:
+        usuarios = _cargar_json_local(USUARIOS_FILE)
+        if target_id_str not in usuarios:
+            return None
+        user = usuarios[target_id_str]
+        if tipo_sancion == "creditos":
+            user["creditos"] = max(0, int(user.get("creditos", 0)) - cantidad)
+        elif tipo_sancion == "boletos":
+            user["boletos_rifa"] = max(0, int(user.get("boletos_rifa", 0)) - cantidad)
+        elif tipo_sancion == "resetear":
+            user["creditos"] = 0
+            user["boletos_rifa"] = 0
+        _guardar_json_local(USUARIOS_FILE, usuarios)
+        return user
+
 

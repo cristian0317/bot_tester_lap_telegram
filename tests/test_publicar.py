@@ -26,6 +26,9 @@ class PublicationTests(unittest.TestCase):
         }
         self.writes = []
         self.firebase = FirestoreSimulado(self.storage, self.writes)
+        self.env_patcher = patch.dict(os.environ, {"BETA_GRATUITA": "false"})
+        self.env_patcher.start()
+        self.addCleanup(self.env_patcher.stop)
 
     def test_valid_publication_reduces_credits_adds_ticket_and_creates_app(self):
         """1. Publicación válida: descuenta 800 créditos, otorga 1 boleto y crea app reclutando."""
@@ -179,6 +182,9 @@ class TelegramHandlerIntegrationTests(unittest.IsolatedAsyncioTestCase):
         }
         self.writes = []
         self.firebase = FirestoreSimulado(self.storage, self.writes)
+        self.env_patcher = patch.dict(os.environ, {"BETA_GRATUITA": "false"})
+        self.env_patcher.start()
+        self.addCleanup(self.env_patcher.stop)
 
     async def test_subirapp_start_rejected_in_local_mode_without_admin_credit(self):
         """10. subirapp_start rechazado en modo local no otorga saldo admin ni crea datos."""

@@ -79,7 +79,8 @@ def obtener_teclado_principal(user_id=None):
     botones = [
         ["🚀 Subir App", "📱 Ver Apps"],
         ["📸 Confirmar Instalación", "📝 Check-in Diario"],
-        ["📊 Mis Créditos", "👥 Referidos", "🎟️ Rifa Mensual"],
+        ["📊 Mis Créditos", "🤝 Comunidad T4T"],
+        ["👥 Referidos", "🎟️ Rifa Mensual"],
         ["📢 Mis Campañas", "📲 Mis Apps en Prueba"]
     ]
     if user_id and str(user_id) in ADMIN_IDS:
@@ -120,10 +121,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     await update.message.reply_text(
-        "👋 ¡Bienvenido a **TestCoin**!\n\n"
-        "La plataforma que conecta desarrolladores con testers reales para pruebas de Google Play Store.\n\n"
-        "🎁 ¡Al registrarte recibirás **200 créditos de bienvenida**!\n\n"
-        "Seleccioná una opción con los botones de abajo:",
+        "👋 ¡Bienvenido a **TestCoin**! 🚀\n\n"
+        "Somos una comunidad de desarrolladores y testers Android, unida para superar juntos el requisito de 14 días y 15 testers de Google Play Store.\n\n"
+        "✨ **Fase Inicial — Beta Gratuita & Programa Founders:**\n"
+        "• 🆓 **100% Gratuito:** Publicar tu aplicación es completamente libre (sin cobro de 800 créditos ni dinero).\n"
+        "• 🌟 **Programa Founder:** Completar pruebas válidas te otorga **Puntos Founder** canjeables por beneficios futuros.\n"
+        "• 🛡️ **Reputación Permanente:** Tu compromiso y puntualidad quedan registrados para siempre en tu perfil.\n"
+        "• 🤝 **Test for Test (T4T) Voluntario:** Podés probar apps de otros desarrolladores para ayudarlos y recibir apoyo mutuo, sin ninguna obligación forzosa para publicar.\n\n"
+        "Seleccioná tu rol con los botones de abajo para comenzar:",
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
@@ -175,6 +180,14 @@ async def seleccion_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "nombre": nombre,
             "rol": rol,
             "creditos": 200,
+            "puntos_founder": 0,
+            "reputacion": {
+                "campanas_completadas": 0,
+                "dias_totales_cumplidos": 0,
+                "faltas_injustificadas": 0,
+                "confiabilidad_pct": 100.0,
+                "nivel_confiabilidad": "Inicial"
+            },
             "boletos_rifa": boletos_iniciales,
             "advertencias": 0,
             "referido_por": referrer_id if referrer_id in usuarios else None,
@@ -186,10 +199,12 @@ async def seleccion_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     guardar_archivo(USUARIOS_FILE, usuarios)
 
+    rep_txt = db.formatear_reputacion(usuarios[user_id])
     respuesta = (
         f"🎉 ¡Registro completado como **{rol.capitalize()}**, {nombre}!\n\n"
-        f"🪙 **Saldo actual:** {usuarios[user_id]['creditos']} créditos de bienvenida.\n"
-        f"🎟️ **Boletos para la rifa mensual:** {usuarios[user_id].get('boletos_rifa', 0)}\n\n"
+        f"🌟 **Fase Beta Founders:** Publicá tu app sin costo o colaborá voluntariamente en T4T.\n"
+        f"🪙 **Créditos:** {usuarios[user_id].get('creditos', 0)} | 🌟 **Puntos Founder:** {usuarios[user_id].get('puntos_founder', 0)}\n"
+        f"🛡️ **Reputación:**\n{rep_txt}\n\n"
         "👇 **¡Usá los botones de abajo para navegar sin escribir comandos!**"
     )
 
@@ -241,16 +256,23 @@ async def subirapp_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return ConversationHandler.END
 
+        es_beta = resultado.get("es_beta") or db.es_beta_gratuita()
+        txt_costo = (
+            "🪙 **Costo de publicación:** 0 créditos (Fase Beta Comunitaria Gratuita)\n"
+            "🌟 **Programa Founder:** Tus testers acumulan Puntos Founder y reputación permanente."
+            if es_beta else
+            "🪙 **Créditos descontados:** 800\n"
+            "🎟️ **¡Ganaste 1 boleto extra para la Rifa Mensual!**"
+        )
         try:
             await update.message.reply_text(
-                f"🎉 **¡CAMPAÑA REGISTRADA EN LISTA DE ESPERA!**\n\n"
+                f"🎉 **¡CAMPAÑA REGISTRADA EN LISTA DE ESPERA{' (BETA FOUNDERS)' if es_beta else ''}!**\n\n"
                 f"📱 **Link:** {app_link}\n"
                 f"📝 **Descripción:** {app_desc}\n"
-                f"🟡 **Estado:** `Reclutando Testers` (0/12 mínimos requeridos)\n"
-                f"🪙 **Créditos descontados:** 800\n"
-                f"🎟️ **¡Ganaste 1 boleto extra para la Rifa Mensual!**\n\n"
+                f"🟡 **Estado:** `Reclutando Testers` (0/15 requeridos)\n"
+                f"{txt_costo}\n\n"
                 f"📌 **¿Qué sigue?**\n"
-                f"Tu app aparecerá en **📱 Ver Apps** como 🟡 *En lista de espera*. Cuando se unan **12 testers**, la app cambiará a 🟢 *Lista para Iniciar* y podrás dar el banderazo con `/iniciarprueba {pub_app_id}`.\n\n"
+                f"Tu app aparecerá en **📱 Ver Apps** como 🟡 *En lista de espera*. Cuando se unan **15 testers**, la app cambiará a 🟢 *Lista para Iniciar* y podrás dar el banderazo con `/iniciarprueba {pub_app_id}`.\n\n"
                 f"🆔 **ID de tu campaña:** `{pub_app_id}`",
                 reply_markup=obtener_teclado_principal(user_id)
             )
@@ -284,33 +306,60 @@ async def subirapp_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     usuario = usuarios[user_id]
     creditos = usuario.get("creditos", 0)
 
-    # Si es admin, otorgar créditos de prueba automáticamente
-    if creditos < 800:
-        if user_id in ADMIN_IDS:
-            usuario["creditos"] += 800
-            guardar_archivo(USUARIOS_FILE, usuarios)
-            await update.message.reply_text("🎁 **[Modo Admin]** Te hemos otorgado +800 créditos de prueba automáticamente.")
-            creditos = usuario["creditos"]
-        else:
-            await update.message.reply_text(
-                f"⚠️ **Créditos insuficientes**\n\n"
-                f"Publicar una campaña requiere 🪙 **800 créditos** (Tu saldo actual: **{creditos} créditos**).\n\n"
-                f"¿Cómo obtener créditos?\n\n"
-                f"1️⃣ **Trabajar en la plataforma (Gratis):**\n"
-                f"   Ganá créditos testeando aplicaciones tocando el botón **📱 Ver Apps**.\n\n"
-                f"2️⃣ **Comprar créditos con dinero:**\n"
-                f"   Recargá 800 créditos por **$800 MXN** usando `/comprarcreditos`.\n\n"
-                f"💡 Una vez que tengas 800 créditos, tocá el botón **🚀 Subir App** de nuevo.",
-                reply_markup=obtener_teclado_principal(user_id),
-                parse_mode="Markdown"
-            )
-            return ConversationHandler.END
+    # En modo beta gratuito no se requiere saldo de 800 créditos ni dinero
+    es_beta_activa = db.es_beta_gratuita()
+    if es_beta_activa:
+        campana_activa_id = usuario.get("campana_activa_id")
+        if campana_activa_id:
+            apps = cargar_archivo(APPS_FILE)
+            app_activa = apps.get(str(campana_activa_id))
+            if app_activa and app_activa.get("estado") in ["reclutando", "en_prueba"]:
+                await update.message.reply_text(
+                    f"⚠️ **Límite de Campañas Activas (Fase Beta)**\n\n"
+                    f"Ya tenés una campaña activa en curso:\n"
+                    f"📱 **App:** {app_activa.get('descripcion')}\n"
+                    f"⚙️ **Estado:** `{app_activa.get('estado')}`\n\n"
+                    f"Durante la beta gratuita, para garantizar la disponibilidad de testers para toda la comunidad, se permite como máximo **1 campaña activa por desarrollador**.\n\n"
+                    f"Podrás publicar una nueva app cuando la actual finalice o sea cerrada en conciliación.",
+                    reply_markup=obtener_teclado_principal(user_id),
+                    parse_mode="Markdown"
+                )
+                return ConversationHandler.END
+    else:
+        # Si es admin, otorgar créditos de prueba automáticamente
+        if creditos < 800:
+            if user_id in ADMIN_IDS:
+                usuario["creditos"] += 800
+                guardar_archivo(USUARIOS_FILE, usuarios)
+                await update.message.reply_text("🎁 **[Modo Admin]** Te hemos otorgado +800 créditos de prueba automáticamente.")
+                creditos = usuario["creditos"]
+            else:
+                await update.message.reply_text(
+                    f"⚠️ **Créditos insuficientes**\n\n"
+                    f"Publicar una campaña requiere 🪙 **800 créditos** (Tu saldo actual: **{creditos} créditos**).\n\n"
+                    f"¿Cómo obtener créditos?\n\n"
+                    f"1️⃣ **Trabajar en la plataforma (Gratis):**\n"
+                    f"   Ganá créditos testeando aplicaciones tocando el botón **📱 Ver Apps**.\n\n"
+                    f"2️⃣ **Comprar créditos con dinero:**\n"
+                    f"   Recargá 800 créditos por **$800 MXN** usando `/comprarcreditos`.\n\n"
+                    f"💡 Una vez que tengas 800 créditos, tocá el botón **🚀 Subir App** de nuevo.",
+                    reply_markup=obtener_teclado_principal(user_id),
+                    parse_mode="Markdown"
+                )
+                return ConversationHandler.END
 
     import uuid
     context.user_data["pub_app_id"] = f"app_{user_id}_{uuid.uuid4().hex[:8]}"
 
-    await update.message.reply_text(
+    cabecera = (
+        "🚀 **Publicar nueva campaña — Fase Beta Comunitaria & Founders**\n"
+        "✨ ¡Publicación 100% gratuita! Sin costo en créditos ni dinero.\n\n"
+        if es_beta_activa else
         "📲 **Publicar nueva campaña en TestCoin**\n\n"
+    )
+
+    await update.message.reply_text(
+        f"{cabecera}"
         "Paso 1/2 — Enviá el **link o URL** de tu aplicación en Google Play Store:\n"
         "(Ejemplo: `https://play.google.com/store/apps/details?id=com.tuapp`)",
         reply_markup=ReplyKeyboardRemove(),
@@ -380,16 +429,24 @@ async def subirapp_descripcion(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         return ConversationHandler.END
 
+    es_beta_pub = resultado.get("es_beta") or db.es_beta_gratuita()
+    txt_costo_desc = (
+        "🪙 **Costo de publicación:** 0 créditos (Fase Beta Comunitaria Gratuita)\n"
+        "🌟 **Programa Founder:** Tus testers recibirán Puntos Founder y reputación permanente."
+        if es_beta_pub else
+        "🪙 **Créditos descontados:** 800\n"
+        "🎟️ **¡Ganaste 1 boleto extra para la Rifa Mensual!**"
+    )
+
     try:
         await update.message.reply_text(
-            f"🎉 **¡CAMPAÑA REGISTRADA EN LISTA DE ESPERA!**\n\n"
+            f"🎉 **¡CAMPAÑA REGISTRADA EN LISTA DE ESPERA{' (BETA FOUNDERS)' if es_beta_pub else ''}!**\n\n"
             f"📱 **Link:** {app_link}\n"
             f"📝 **Descripción:** {descripcion_enviada}\n"
-            f"🟡 **Estado:** `Reclutando Testers` (0/12 mínimos requeridos)\n"
-            f"🪙 **Créditos descontados:** 800\n"
-            f"🎟️ **¡Ganaste 1 boleto extra para la Rifa Mensual!**\n\n"
+            f"🟡 **Estado:** `Reclutando Testers` (0/15 requeridos)\n"
+            f"{txt_costo_desc}\n\n"
             f"📌 **¿Qué sigue?**\n"
-            f"Tu app aparecerá en **📱 Ver Apps** como 🟡 *En lista de espera*. Cuando se unan **12 testers**, la app cambiará a 🟢 *Lista para Iniciar* y podrás dar el banderazo con `/iniciarprueba {app_id}`.\n\n"
+            f"Tu app aparecerá en **📱 Ver Apps** como 🟡 *En lista de espera*. Cuando se unan **15 testers**, la app cambiará a 🟢 *Lista para Iniciar* y podrás dar el banderazo con `/iniciarprueba {app_id}`.\n\n"
             f"🆔 **ID de tu campaña:** `{app_id}`",
             reply_markup=obtener_teclado_principal(user_id)
         )
@@ -877,18 +934,30 @@ async def checkin_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     app = resultado
     dias_actuales = resultado["dias"]
     estado_ent = resultado.get("estado_entrega", "puntual")
+    es_beta = bool(resultado.get("es_beta") or app.get("es_beta") or app.get("tipo_campana") == "beta_gratuita")
 
     if res_tipo == "completada":
-        await update.message.reply_text(
-            f"🎉 **¡FELICITACIONES! HAS COMPLETADO LOS 14 DÍAS DE PRUEBA** 🏆\n\n"
-            f"📱 **App:** {app.get('descripcion')}\n"
-            f"🪙 **Recompensa Otorgada:** +800 Créditos\n"
-            f"🎟️ **Premio Extra:** +1 Boleto para la Rifa Mensual\n\n"
-            f"✅ *Liquidación Auditada (5D):* Recompensa verificada y acreditada transaccionalmente.\n\n"
-            f"¡Muchas gracias por contribuir a la comunidad TestCoin!",
-            reply_markup=obtener_teclado_principal(user_id),
-            parse_mode="Markdown"
-        )
+        if es_beta:
+            await update.message.reply_text(
+                f"🎉 **¡FELICITACIONES! HAS COMPLETADO LOS 14 DÍAS DE PRUEBA** 🏆\n\n"
+                f"📱 **App:** {app.get('descripcion')}\n"
+                f"🌟 **Recompensa Otorgada:** +100 Puntos Founder\n\n"
+                f"✅ *Liquidación Auditada (5D/6A):* Recompensa verificada y acreditada transaccionalmente.\n\n"
+                f"¡Muchas gracias por contribuir a la comunidad TestCoin!",
+                reply_markup=obtener_teclado_principal(user_id),
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(
+                f"🎉 **¡FELICITACIONES! HAS COMPLETADO LOS 14 DÍAS DE PRUEBA** 🏆\n\n"
+                f"📱 **App:** {app.get('descripcion')}\n"
+                f"🪙 **Recompensa Otorgada:** +800 Créditos\n"
+                f"🎟️ **Premio Extra:** +1 Boleto para la Rifa Mensual\n\n"
+                f"✅ *Liquidación Auditada (5D):* Recompensa verificada y acreditada transaccionalmente.\n\n"
+                f"¡Muchas gracias por contribuir a la comunidad TestCoin!",
+                reply_markup=obtener_teclado_principal(user_id),
+                parse_mode="Markdown"
+            )
 
         dev_id = app.get("dev_id")
         if dev_id:
@@ -907,13 +976,31 @@ async def checkin_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
     else:
         estado_icon = "✅ Puntual" if estado_ent == "puntual" else "⚠️ Tardío"
+        dias_restantes = max(0, 14 - dias_actuales)
+        if dias_actuales >= 14:
+            if es_beta:
+                txt_meta = (
+                    "🎉 **¡Has completado tus 14 días de prueba requeridos!**\n"
+                    "🌟 Recibirás **+100 Puntos Founder** una vez que la conciliación definitiva confirme tu cumplimiento."
+                )
+            else:
+                txt_meta = (
+                    "🎉 **¡Has completado tus 14 días de prueba requeridos!**\n"
+                    "🪙 Tu prueba pasará a conciliación para acreditar tus 800 créditos y 1 boleto de rifa."
+                )
+        else:
+            if es_beta:
+                txt_meta = f"💡 ¡Faltan sólo {dias_restantes} días para completar tu prueba y ser elegible para tus 100 Puntos Founder al conciliar!"
+            else:
+                txt_meta = f"💡 ¡Faltan sólo {dias_restantes} días para obtener tus 800 créditos!"
+
         await update.message.reply_text(
             f"✅ **¡Check-in diario registrado exitosamente!**\n\n"
             f"📱 **App:** {app.get('descripcion')}\n"
             f"📅 **Vencimiento satisfecho:** `{resultado.get('fecha_vencimiento')}`\n"
             f"⏱️ **Evaluación:** `{estado_icon}`\n"
             f"📊 **Progreso puntual verificado:** `{dias_actuales}/14` días.\n\n"
-            f"💡 ¡Faltan sólo {14 - dias_actuales} días para obtener tus 800 créditos!",
+            f"{txt_meta}",
             reply_markup=obtener_teclado_principal(user_id),
             parse_mode="Markdown"
         )
@@ -958,6 +1045,19 @@ async def rifa(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_boletos = sum(u.get("boletos_rifa", 0) for u in usuarios.values())
     probabilidad = (boletos_usuario / total_boletos * 100) if total_boletos > 0 else 0
 
+    if db.es_beta_gratuita():
+        await update.message.reply_text(
+            f"🎟️ **Rifa Mensual — Pausada durante la Beta Gratuita**\n\n"
+            f"Durante la fase beta comunitaria, la emisión y los sorteos de rifas se encuentran temporalmente en pausa.\n\n"
+            f"📊 **Tus Boletos Acumulados:** `{boletos_usuario}` boletos\n"
+            f"🔒 Tus boletos históricos están a salvo y se conservarán para cuando se reanude el programa.\n\n"
+            f"🌟 **Recompensas en la Beta:**\n"
+            f"En esta fase, tus participaciones se premian con **Puntos Founder** y reputación inmutable.",
+            reply_markup=obtener_teclado_principal(user_id),
+            parse_mode="Markdown"
+        )
+        return
+
     await update.message.reply_text(
         f"🎟️ **Rifa Mensual TestCoin**\n\n"
         f"Todos los usuarios activos participan automáticamente en el sorteo mensual.\n\n"
@@ -975,6 +1075,14 @@ async def rifa(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def hacerifa(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     if user_id not in ADMIN_IDS:
+        return
+
+    if db.es_beta_gratuita():
+        await update.message.reply_text(
+            "⏸️ **Rifa en Pausa:** El sorteo mensual está deshabilitado temporalmente durante la Beta Gratuita Comunitaria (las campañas beta entregan Puntos Founder en lugar de boletos).",
+            reply_markup=obtener_teclado_principal(user_id),
+            parse_mode="Markdown"
+        )
         return
 
     usuarios = cargar_archivo(USUARIOS_FILE)
@@ -1021,13 +1129,38 @@ async def miscreditos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ No estás registrado. Usá /start.")
         return
     usuario = usuarios[user_id]
+    rep_txt = db.formatear_reputacion(usuario)
     await update.message.reply_text(
-        f"📊 **Estado de tu Cuenta — TestCoin**\n\n"
+        f"📊 **Estado de tu Cuenta — TestCoin (Beta & Founders)**\n\n"
         f"👤 **Usuario:** {usuario.get('nombre')}\n"
         f"🏷️ **Rol:** {usuario.get('rol', 'Sin definir').capitalize()}\n"
-        f"🪙 **Créditos acumulados:** {usuario.get('creditos', 0)}\n"
-        f"🎟️ **Boletos para Rifa Mensual:** {usuario.get('boletos_rifa', 0)}\n"
-        f"⚠️ **Advertencias recibidas:** {usuario.get('advertencias', 0)}",
+        f"🌟 **Puntos Founder:** `{usuario.get('puntos_founder', 0)}` pts\n"
+        f"🪙 **Créditos tradicionales:** `{usuario.get('creditos', 0)}` créditos\n"
+        f"🎟️ **Boletos para Rifa Mensual:** `{usuario.get('boletos_rifa', 0)}`\n"
+        f"⚠️ **Advertencias recibidas:** `{usuario.get('advertencias', 0)}`\n\n"
+        f"🛡️ **Reputación Permanente:**\n{rep_txt}\n\n"
+        f"🤝 **T4T Comunitario:** Probá apps voluntariamente con **📱 Ver Apps** para ganar Puntos Founder y mejorar tu reputación.",
+        reply_markup=obtener_teclado_principal(user_id),
+        parse_mode="Markdown"
+    )
+
+async def t4t_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Explica el programa Test for Test (T4T) voluntario y la comunidad Founders."""
+    user_id = str(update.message.from_user.id)
+    usuarios = cargar_archivo(USUARIOS_FILE)
+    usuario = usuarios.get(user_id, {})
+    rep_txt = db.formatear_reputacion(usuario) if usuario else "Registrate con /start para ver tu reputación."
+    await update.message.reply_text(
+        "🤝 **Comunidad Test for Test (T4T) — TestCoin**\n\n"
+        "El programa T4T es una iniciativa de apoyo mutuo y voluntario entre desarrolladores Android:\n\n"
+        "• 🆓 **Libertad absoluta:** Publicar tu app es 100% gratuito. No estás forzado a testear apps de otros para poder publicar la tuya.\n"
+        "• 🔄 **Reciprocidad voluntaria:** Al probar las apps de otros miembros, incentivás a que ellos prueben la tuya, completando tus 15 testers mucho más rápido.\n"
+        "• 🌟 **Puntos Founder:** Cada campaña que completes de 14 días te recompensa con Puntos Founder canjeables por beneficios futuros.\n"
+        "• 🛡️ **Reputación permanente:** Tu confiabilidad, puntualidad y cumplimiento quedan grabados de forma inmutable en la red.\n\n"
+        f"👤 **Tu estado actual:**\n"
+        f"🌟 Puntos Founder: `{usuario.get('puntos_founder', 0)}`\n"
+        f"{rep_txt}\n\n"
+        "👉 Tocá **📱 Ver Apps** para explorar aplicaciones disponibles de la comunidad.",
         reply_markup=obtener_teclado_principal(user_id),
         parse_mode="Markdown"
     )
@@ -1216,8 +1349,61 @@ async def miscampanas(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     await update.message.reply_text(mensaje, reply_markup=obtener_teclado_principal(user_id), parse_mode="Markdown")
 
+async def miperfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Muestra el perfil unificado del usuario con reputación, saldos y estado de participación."""
+    user_id = str(update.message.from_user.id)
+    usuarios = cargar_archivo(USUARIOS_FILE)
+
+    if user_id not in usuarios:
+        await update.message.reply_text("❌ No estás registrado. Usá /start para registrarte primero.", reply_markup=obtener_teclado_principal(user_id))
+        return
+
+    usuario = usuarios[user_id]
+    rep_txt = db.formatear_reputacion(usuario)
+    
+    apps = cargar_archivo(APPS_FILE)
+    apps_testeando = sum(
+        1 for a in apps.values()
+        if user_id in [str(t) for t in a.get("testers", [])] and a.get("estado") in ["reclutando", "en_prueba"]
+    )
+    apps_publicadas = sum(
+        1 for a in apps.values()
+        if str(a.get("dev_id")) == user_id and a.get("estado") in ["reclutando", "en_prueba"]
+    )
+
+    await update.message.reply_text(
+        f"👤 **Perfil de Usuario — TestCoin**\n\n"
+        f"👤 **Nombre:** {usuario.get('nombre')}\n"
+        f"🆔 **ID:** `{user_id}`\n"
+        f"🏷️ **Rol:** {usuario.get('rol', 'Tester').capitalize()}\n\n"
+        f"🌟 **Puntos Founder:** `{usuario.get('puntos_founder', 0)}` pts\n"
+        f"🪙 **Créditos tradicionales:** `{usuario.get('creditos', 0)}` créditos\n"
+        f"🎟️ **Boletos para Rifa Mensual:** `{usuario.get('boletos_rifa', 0)}`\n"
+        f"⚠️ **Advertencias recibidas:** `{usuario.get('advertencias', 0)}`\n\n"
+        f"🛡️ **Reputación Permanente:**\n{rep_txt}\n\n"
+        f"📊 **Estado de Participación:**\n"
+        f"• 📱 Apps activas testeando: `{apps_testeando}`\n"
+        f"• 🚀 Apps activas publicadas: `{apps_publicadas}`\n\n"
+        f"🤝 **Comunidad T4T:** Participá activamente con **📱 Ver Apps** para ganar Puntos Founder y mejorar tu reputación.",
+        reply_markup=obtener_teclado_principal(user_id),
+        parse_mode="Markdown"
+    )
+
 async def comprarcreditos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
+    if db.es_beta_gratuita():
+        await update.message.reply_text(
+            "🆓 **Beta Gratuita Comunitaria Activa**\n\n"
+            "Durante esta fase beta, **publicar tus aplicaciones es 100% gratuito**.\n\n"
+            "• No necesitás comprar créditos ni realizar ningún pago.\n"
+            "• El costo de publicación es de 🪙 **0 créditos** y $0 MXN.\n"
+            "• Podés subir tu app directamente con el botón **🚀 Subir App** o usando `/subirapp`.\n\n"
+            "🤝 Formamos una comunidad de apoyo mutuo (T4T) entre desarrolladores y testers Android.",
+            reply_markup=obtener_teclado_principal(user_id),
+            parse_mode="Markdown"
+        )
+        return
+
     await update.message.reply_text(
         "💳 **Recarga de Créditos — TestCoin**\n\n"
         "Si sos desarrollador y no querés probar apps de otros usuarios, podés comprar créditos directamente:\n\n"
@@ -1262,29 +1448,42 @@ async def darcreditos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except ValueError:
         await update.message.reply_text("❌ La cantidad debe ser un número entero.")
         return
-    usuarios = cargar_archivo(USUARIOS_FILE)
-    if target_user_id not in usuarios:
+    res = db.actualizar_creditos_admin_seguro(target_user_id, cantidad)
+    if not res:
         await update.message.reply_text(f"❌ El usuario `{target_user_id}` no existe.", parse_mode="Markdown")
         return
-    usuarios[target_user_id]["creditos"] = usuarios[target_user_id].get("creditos", 0) + cantidad
-    guardar_archivo(USUARIOS_FILE, usuarios)
-    await update.message.reply_text(f"✅ +{cantidad} Créditos otorgados a {usuarios[target_user_id]['nombre']}.", reply_markup=obtener_teclado_principal(user_id), parse_mode="Markdown")
+    nombre_user = res.get("nombre", target_user_id)
+    await update.message.reply_text(
+        f"✅ +{cantidad} Créditos otorgados a {nombre_user} (Saldo actual: {res.get('creditos', 0)}).",
+        reply_markup=obtener_teclado_principal(user_id),
+        parse_mode="Markdown"
+    )
 
 async def regalarcampana(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     if user_id not in ADMIN_IDS:
         return
+    if db.es_beta_gratuita():
+        await update.message.reply_text(
+            "ℹ️ **Modo Beta Gratuita Activo:** Las publicaciones ya tienen un costo de 🪙 **0 créditos**. No es necesario regalar campañas ni créditos para publicar apps.",
+            reply_markup=obtener_teclado_principal(user_id),
+            parse_mode="Markdown"
+        )
+        return
     if not context.args:
         await update.message.reply_text("⚠️ Uso correcto: `/regalarcampana <user_id>`", parse_mode="Markdown")
         return
     target_user_id = context.args[0]
-    usuarios = cargar_archivo(USUARIOS_FILE)
-    if target_user_id not in usuarios:
+    res = db.actualizar_creditos_admin_seguro(target_user_id, 800)
+    if not res:
         await update.message.reply_text(f"❌ El usuario `{target_user_id}` no existe.", parse_mode="Markdown")
         return
-    usuarios[target_user_id]["creditos"] = usuarios[target_user_id].get("creditos", 0) + 800
-    guardar_archivo(USUARIOS_FILE, usuarios)
-    await update.message.reply_text(f"🎁 Se le han acreditado 800 créditos de regalo a {usuarios[target_user_id]['nombre']}.", reply_markup=obtener_teclado_principal(user_id), parse_mode="Markdown")
+    nombre_user = res.get("nombre", target_user_id)
+    await update.message.reply_text(
+        f"🎁 Se le han acreditado 800 créditos de regalo a {nombre_user}.",
+        reply_markup=obtener_teclado_principal(user_id),
+        parse_mode="Markdown"
+    )
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
@@ -1387,49 +1586,36 @@ async def sancionartester(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg_admin, reply_markup=obtener_teclado_principal(user_id), parse_mode="Markdown")
         return
 
-    usuarios = cargar_archivo(USUARIOS_FILE)
-    if target_tester_id not in usuarios:
-        await update.message.reply_text(f"❌ El tester `{target_tester_id}` no está registrado.", parse_mode="Markdown")
+    if tipo_sancion in ["creditos", "boletos", "resetear"]:
+        cant = 0
+        if tipo_sancion in ["creditos", "boletos"]:
+            if len(context.args) < 3:
+                await update.message.reply_text("⚠️ Especificá la cantidad.", parse_mode="Markdown")
+                return
+            try:
+                cant = int(context.args[2])
+            except ValueError:
+                await update.message.reply_text("❌ La cantidad debe ser un número entero.")
+                return
+
+        res = db.sancionar_usuario_admin_seguro(target_tester_id, tipo_sancion, cant)
+        if not res:
+            await update.message.reply_text(f"❌ El tester `{target_tester_id}` no está registrado.", parse_mode="Markdown")
+            return
+
+        tester_nombre = res.get("nombre", target_tester_id)
+        if tipo_sancion == "creditos":
+            msg_admin = f"🚨 Descuento de 🪙 `{cant}` créditos a {tester_nombre} (Saldo actual: {res.get('creditos', 0)})."
+        elif tipo_sancion == "boletos":
+            msg_admin = f"🚨 Descuento de 🎟️ `{cant}` boletos a {tester_nombre} (Boletos actuales: {res.get('boletos_rifa', 0)})."
+        else:
+            msg_admin = f"🚨 Cuenta de {tester_nombre} reseteada a 0 créditos y 0 boletos."
+
+        await update.message.reply_text(msg_admin, reply_markup=obtener_teclado_principal(user_id), parse_mode="Markdown")
         return
-
-    tester = usuarios[target_tester_id]
-
-    if tipo_sancion == "creditos":
-        if len(context.args) < 3:
-            await update.message.reply_text("⚠️ Especificá la cantidad.", parse_mode="Markdown")
-            return
-        try:
-            cant = int(context.args[2])
-        except ValueError:
-            await update.message.reply_text("❌ La cantidad debe ser un número entero.")
-            return
-        tester["creditos"] = max(0, tester.get("creditos", 0) - cant)
-        guardar_archivo(USUARIOS_FILE, usuarios)
-        msg_admin = f"🚨 Descuento de 🪙 `{cant}` créditos a {tester['nombre']}."
-
-    elif tipo_sancion == "boletos":
-        if len(context.args) < 3:
-            await update.message.reply_text("⚠️ Especificá la cantidad.", parse_mode="Markdown")
-            return
-        try:
-            cant = int(context.args[2])
-        except ValueError:
-            await update.message.reply_text("❌ La cantidad debe ser un número entero.")
-            return
-        tester["boletos_rifa"] = max(0, tester.get("boletos_rifa", 0) - cant)
-        guardar_archivo(USUARIOS_FILE, usuarios)
-        msg_admin = f"🚨 Descuento de 🎟️ `{cant}` boletos a {tester['nombre']}."
-
-    elif tipo_sancion == "resetear":
-        tester["creditos"] = 0
-        tester["boletos_rifa"] = 0
-        guardar_archivo(USUARIOS_FILE, usuarios)
-        msg_admin = f"🚨 Cuenta de {tester['nombre']} reseteada."
     else:
         await update.message.reply_text("❌ Tipo de sanción no reconocido.", parse_mode="Markdown")
         return
-
-    await update.message.reply_text(msg_admin, reply_markup=obtener_teclado_principal(user_id), parse_mode="Markdown")
 
 # --- FLUJOS DE CASOS, APELACIONES Y AUDITORÍA (5C.2) ---
 async def _mostrar_menu_casos_app(target, app_id, app, user_id, context=None):
@@ -1667,7 +1853,7 @@ async def _mostrar_conciliacion_campana(target, app_id, app, user_id, context=No
         f"🔒 **Estado Conciliación:** `{est_conc}`\n"
         f"👥 **Testers Inscritos:** `{total_ins}/15`\n"
         f"🏆 **Cumplieron 14 días:** `{total_comp}`\n"
-        f"🪙 **Recompensas Liquidadas:** `{total_liq}` (+800 / +1🎟️)\n"
+        f"🪙 **Recompensas Liquidadas:** `{total_liq}` {'(+100 Pts Founder c/u)' if resumen.get('es_beta') else '(+800 / +1🎟️)'}\n"
         f"⏳ **Recompensas Pendientes:** `{total_pend}`\n"
     )
 
@@ -2137,9 +2323,9 @@ async def manejar_callback_query(update: Update, context: ContextTypes.DEFAULT_T
         res = db.liquidar_campana_pendientes(app_id, actor_id=user_id)
         if res.get("exito"):
             msg_res = (
-                f"🪙 **Liquidación de Recompensas Ejecutada (5D)**\n\n"
+                f"🪙 **Liquidación de Recompensas Ejecutada (5D/6A)**\n\n"
                 f"📱 Campaña: `{app_id}`\n"
-                f"✅ Liquidados con éxito: `{res.get('liquidados_exitosos', 0)}` testers (+800 créditos y +1🎟️ c/u)\n"
+                f"✅ Liquidados con éxito: `{res.get('liquidados_exitosos', 0)}` testers {'(+100 Puntos Founder c/u)' if res.get('es_beta') else '(+800 créditos y +1🎟️ c/u)'}\n"
                 f"⚠️ Errores / Bloqueados: `{res.get('errores', 0)}`"
             )
         else:
@@ -2598,13 +2784,18 @@ def main():
 
     app.add_handler(CommandHandler("miscreditos", miscreditos))
     app.add_handler(CommandHandler("creditos", miscreditos))
+    app.add_handler(CommandHandler("miperfil", miperfil))
     app.add_handler(MessageHandler(filters.Regex("^📊 Mis Créditos$"), miscreditos))
+    app.add_handler(MessageHandler(filters.Regex("^👤 Mi Perfil$"), miperfil))
 
     app.add_handler(CommandHandler("referidos", referidos))
     app.add_handler(MessageHandler(filters.Regex("^👥 Referidos$"), referidos))
 
     app.add_handler(CommandHandler("rifa", rifa))
     app.add_handler(MessageHandler(filters.Regex("^🎟️ Rifa Mensual$"), rifa))
+
+    app.add_handler(CommandHandler("t4t", t4t_info))
+    app.add_handler(MessageHandler(filters.Regex("^🤝 Comunidad T4T$"), t4t_info))
 
     app.add_handler(CommandHandler("miscampanas", miscampanas))
     app.add_handler(MessageHandler(filters.Regex("^📢 Mis Campañas$"), miscampanas))
