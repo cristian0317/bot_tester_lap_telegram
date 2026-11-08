@@ -2850,6 +2850,35 @@ def main():
     host = os.getenv("HOST", "0.0.0.0")
 
     if listen_mode == "webhook" and webhook_url:
+        try:
+            import tornado.web
+
+            class HealthCheckHandler(tornado.web.RequestHandler):
+                def get(self):
+                    self.set_status(200)
+                    self.set_header("Content-Type", "application/json")
+                    self.write('{"status": "ok", "bot": "TestCoin", "service": "live"}')
+
+                def head(self):
+                    self.set_status(200)
+
+            _orig_tornado_init = tornado.web.Application.__init__
+
+            def _patched_tornado_init(self, handlers=None, *args, **kwargs):
+                if handlers is None:
+                    handlers = []
+                health_routes = [
+                    (r"/", HealthCheckHandler),
+                    (r"/health", HealthCheckHandler),
+                ]
+                handlers = list(health_routes) + list(handlers)
+                _orig_tornado_init(self, handlers, *args, **kwargs)
+
+            tornado.web.Application.__init__ = _patched_tornado_init
+            logger.info("Rutas de HealthCheck (/ y /health) registradas en Tornado.")
+        except ImportError:
+            pass
+
         url_path = f"telegram/{TOKEN}"
         full_webhook_url = f"{webhook_url.rstrip('/')}/{url_path}"
         logger.info(f"Modo Webhook activado: {full_webhook_url}")
