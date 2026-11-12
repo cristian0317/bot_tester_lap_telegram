@@ -88,7 +88,36 @@ def obtener_teclado_principal(user_id=None):
     
     return ReplyKeyboardMarkup(botones, resize_keyboard=True)
 
-# --- FUNCIONES AUXILIARES DE ALMACENAMIENTO (FIREBASE / JSON) ---
+BOTONES_MENU_TEXTOS = {
+    "🚀 Subir App", "📱 Ver Apps",
+    "📸 Confirmar Instalación", "📝 Check-in Diario",
+    "📊 Mis Créditos", "🤝 Comunidad T4T",
+    "👥 Referidos", "🎟️ Rifa Mensual",
+    "📢 Mis Campañas", "📲 Mis Apps en Prueba",
+    "🛠️ Panel Admin", "👤 Mi Perfil",
+    "❌ Cancelar", "/cancelar", "cancelar"
+}
+
+async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cancela cualquier operación en curso y restaura el menú principal."""
+    user_id = str(update.message.from_user.id) if update and update.message and update.message.from_user else None
+    context.user_data.pop("pub_app_id", None)
+    context.user_data.pop("app_link", None)
+    context.user_data.pop("app_descripcion", None)
+    context.user_data.pop("pub_estado_incierto", None)
+    context.user_data.pop("confirmar_app_id", None)
+    context.user_data.pop("confirmar_vencimiento", None)
+    context.user_data.pop("checkin_app_id", None)
+    context.user_data.pop("checkin_vencimiento", None)
+
+    if update and update.message:
+        await update.message.reply_text(
+            "🛑 **Operación cancelada.**\n\nMenú principal restaurado:",
+            reply_markup=obtener_teclado_principal(user_id),
+            parse_mode="Markdown"
+        )
+    return ConversationHandler.END
+
 def cargar_archivo(archivo):
     """Carga un archivo o colección. Si está configurado Firebase, lee de Firestore; de lo contrario, del JSON local."""
     if archivo == USUARIOS_FILE:
@@ -361,20 +390,73 @@ async def subirapp_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"{cabecera}"
         "Paso 1/2 — Enviá el **link o URL** de tu aplicación en Google Play Store:\n"
-        "(Ejemplo: `https://play.google.com/store/apps/details?id=com.tuapp`)",
-        reply_markup=ReplyKeyboardRemove(),
+        "(Ejemplo: `https://play.google.com/store/apps/details?id=com.tuapp`)\n\n"
+        "💡 _Tocá_ **❌ Cancelar** _si deseás volver al menú principal._",
+        reply_markup=ReplyKeyboardMarkup([["❌ Cancelar"]], resize_keyboard=True),
         parse_mode="Markdown"
     )
     return SUBIR_LINK
 
 async def subirapp_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Guarda el link de la app y solicita la descripción."""
-    link_enviado = update.message.text.strip()
+    user_id = str(update.message.from_user.id) if update and update.message and update.message.from_user else None
+    link_enviado = update.message.text.strip() if update and update.message and update.message.text else ""
+
+    if link_enviado in BOTONES_MENU_TEXTOS or link_enviado.lower() in ["cancelar", "/cancelar", "salir"]:
+        context.user_data.pop("pub_app_id", None)
+        context.user_data.pop("app_link", None)
+        context.user_data.pop("app_descripcion", None)
+        context.user_data.pop("pub_estado_incierto", None)
+
+        if link_enviado in ["❌ Cancelar", "/cancelar", "cancelar", "salir"]:
+            await update.message.reply_text(
+                "🛑 **Publicación cancelada.**\n\nMenú principal restaurado:",
+                reply_markup=obtener_teclado_principal(user_id),
+                parse_mode="Markdown"
+            )
+            return ConversationHandler.END
+
+        if link_enviado == "📸 Confirmar Instalación":
+            return await confirmar_start(update, context)
+        elif link_enviado == "📱 Ver Apps":
+            await verapps(update, context)
+            return ConversationHandler.END
+        elif link_enviado == "📝 Check-in Diario":
+            return await checkin_start(update, context)
+        elif link_enviado in ["📊 Mis Créditos", "💰 Mis Créditos"]:
+            await miscreditos(update, context)
+            return ConversationHandler.END
+        elif link_enviado == "👤 Mi Perfil":
+            await miperfil(update, context)
+            return ConversationHandler.END
+        elif link_enviado == "🚀 Subir App":
+            return await subirapp_start(update, context)
+        elif link_enviado == "👥 Referidos":
+            await referidos(update, context)
+            return ConversationHandler.END
+        elif link_enviado == "🎟️ Rifa Mensual":
+            await rifa(update, context)
+            return ConversationHandler.END
+        elif link_enviado == "🤝 Comunidad T4T":
+            await t4t_info(update, context)
+            return ConversationHandler.END
+        elif link_enviado == "📢 Mis Campañas":
+            await miscampanas(update, context)
+            return ConversationHandler.END
+        elif link_enviado == "📲 Mis Apps en Prueba":
+            await misapps(update, context)
+            return ConversationHandler.END
+        elif link_enviado == "🛠️ Panel Admin":
+            await admin(update, context)
+            return ConversationHandler.END
+        return ConversationHandler.END
 
     if not (link_enviado.startswith("http://") or link_enviado.startswith("https://") or "play.google.com" in link_enviado):
         await update.message.reply_text(
             "⚠️ Por favor enviá un enlace válido de Google Play Store.\n"
-            "Ejemplo: `https://play.google.com/store/apps/details?id=com.miempresa.miapp`",
+            "Ejemplo: `https://play.google.com/store/apps/details?id=com.miempresa.miapp`\n\n"
+            "💡 _Si querés salir, tocá_ **❌ Cancelar** _o enviá_ `/cancelar`.",
+            reply_markup=ReplyKeyboardMarkup([["❌ Cancelar"]], resize_keyboard=True),
             parse_mode="Markdown"
         )
         return SUBIR_LINK
@@ -382,16 +464,31 @@ async def subirapp_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["app_link"] = link_enviado
     await update.message.reply_text(
         "✅ **Link recibido y guardado con éxito.**\n\n"
-        "Paso 2/2 — Escribí una descripción breve de tu app (qué hace, qué características deben probar los testers):",
+        "Paso 2/2 — Escribí una descripción breve de tu app (qué hace, qué características deben probar los testers):\n\n"
+        "💡 _Si querés salir, tocá_ **❌ Cancelar** _o enviá_ `/cancelar`.",
+        reply_markup=ReplyKeyboardMarkup([["❌ Cancelar"]], resize_keyboard=True),
         parse_mode="Markdown"
     )
     return SUBIR_DESCRIPCION
 
 async def subirapp_descripcion(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Finaliza el registro de la app en Lista de Espera, descuenta 800 créditos y restablece botones de forma atómica."""
-    descripcion_enviada = update.message.text.strip()
-    user_id = str(update.message.from_user.id)
-    nombre = update.message.from_user.first_name
+    descripcion_enviada = update.message.text.strip() if update and update.message and update.message.text else ""
+    user_id = str(update.message.from_user.id) if update and update.message and update.message.from_user else None
+    nombre = update.message.from_user.first_name if update and update.message and update.message.from_user else ""
+
+    if descripcion_enviada in BOTONES_MENU_TEXTOS or descripcion_enviada.lower() in ["cancelar", "/cancelar", "salir"]:
+        context.user_data.pop("pub_app_id", None)
+        context.user_data.pop("app_link", None)
+        context.user_data.pop("app_descripcion", None)
+        context.user_data.pop("pub_estado_incierto", None)
+        await update.message.reply_text(
+            "🛑 **Publicación cancelada.**\n\nMenú principal restaurado:",
+            reply_markup=obtener_teclado_principal(user_id),
+            parse_mode="Markdown"
+        )
+        return ConversationHandler.END
+
 
     app_id = context.user_data.get("pub_app_id")
     app_link = context.user_data.get("app_link")
@@ -699,12 +796,31 @@ async def confirmar_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         fecha_v1 = app_info.get("fecha_lanzamiento") or datetime.now().strftime("%Y-%m-%d")
     context.user_data["confirmar_vencimiento"] = fecha_v1
 
+    reply_markup_cancel = ReplyKeyboardMarkup([["❌ Cancelar"]], resize_keyboard=True) if "ReplyKeyboardMarkup" in globals() else ReplyKeyboardRemove()
     await update.message.reply_text(
         f"📸 **Confirmar Instalación de la App**\n\n"
         f"📱 **App:** {app_info.get('descripcion', app_id)}\n"
         f"📅 **Vencimiento 1ª entrega:** `{fecha_v1}` a las **5:00 PM** (America/Mexico_City)\n\n"
-        f"Por favor, enviá una **captura de pantalla** donde se vea la aplicación instalada en tu teléfono.",
-        reply_markup=ReplyKeyboardRemove(),
+        f"Por favor, enviá una **captura de pantalla** donde se vea la aplicación instalada en tu teléfono.\n\n"
+        f"💡 _Si querés salir, tocá_ **❌ Cancelar** _o enviá_ `/cancelar`.",
+        reply_markup=reply_markup_cancel,
+        parse_mode="Markdown"
+    )
+    return CONFIRMAR_FOTO
+
+async def confirmar_texto_fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Maneja mensajes de texto recibidos cuando se esperaba la foto de confirmación."""
+    user_id = str(update.message.from_user.id) if update and update.message and update.message.from_user else None
+    texto = update.message.text.strip() if update and update.message and update.message.text else ""
+
+    if ("BOTONES_MENU_TEXTOS" in globals() and texto in BOTONES_MENU_TEXTOS) or texto.lower() in ["cancelar", "/cancelar", "salir"]:
+        return await cancelar(update, context)
+
+    reply_markup_cancel = ReplyKeyboardMarkup([["❌ Cancelar"]], resize_keyboard=True) if "ReplyKeyboardMarkup" in globals() else ReplyKeyboardRemove()
+    await update.message.reply_text(
+        "⚠️ Para confirmar la instalación, debés enviar una **foto / captura de pantalla** de la app instalada.\n\n"
+        "💡 _Si querés salir, tocá_ **❌ Cancelar** _o enviá_ `/cancelar`.",
+        reply_markup=reply_markup_cancel,
         parse_mode="Markdown"
     )
     return CONFIRMAR_FOTO
@@ -891,7 +1007,15 @@ async def checkin_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     photos = getattr(update.message, "photo", None) if update and hasattr(update, "message") else None
     if not app_id or not photos:
-        await update.message.reply_text("❌ Por favor enviá una captura de pantalla de la aplicación.", reply_markup=obtener_teclado_principal(user_id))
+        texto_chk = update.message.text.strip() if update and update.message and update.message.text else ""
+        if texto_chk in BOTONES_MENU_TEXTOS or texto_chk.lower() in ["cancelar", "/cancelar", "salir"]:
+            return await cancelar(update, context)
+        await update.message.reply_text(
+            "❌ Por favor enviá una captura de pantalla de la aplicación.\n\n"
+            "💡 _O tocá_ **❌ Cancelar** _para volver al menú principal._",
+            reply_markup=ReplyKeyboardMarkup([["❌ Cancelar"]], resize_keyboard=True),
+            parse_mode="Markdown"
+        )
         return CHECKIN_FOTO
 
     fecha_venc = context.user_data.pop("checkin_vencimiento", None)
@@ -2727,12 +2851,18 @@ def main():
     """Inicializa el bot de Telegram con soporte 100% de Botones Teclado."""
     app = Application.builder().token(TOKEN).post_init(post_init).build()
 
+    fallbacks_comunes = [
+        CommandHandler("start", start),
+        CommandHandler("cancelar", cancelar),
+        MessageHandler(filters.Regex("^❌ Cancelar$"), cancelar)
+    ]
+
     conv_start = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
             REGISTRO_TIPO: [MessageHandler(filters.TEXT & ~filters.COMMAND, seleccion_tipo)],
         },
-        fallbacks=[CommandHandler("start", start)]
+        fallbacks=fallbacks_comunes
     )
 
     conv_subirapp = ConversationHandler(
@@ -2744,7 +2874,7 @@ def main():
             SUBIR_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, subirapp_link)],
             SUBIR_DESCRIPCION: [MessageHandler(filters.TEXT & ~filters.COMMAND, subirapp_descripcion)],
         },
-        fallbacks=[CommandHandler("start", start)]
+        fallbacks=fallbacks_comunes
     )
 
     conv_confirmar = ConversationHandler(
@@ -2753,9 +2883,12 @@ def main():
             MessageHandler(filters.Regex("^📸 Confirmar Instalación$"), confirmar_start)
         ],
         states={
-            CONFIRMAR_FOTO: [MessageHandler(filters.PHOTO, confirmar_foto)],
+            CONFIRMAR_FOTO: [
+                MessageHandler(filters.PHOTO, confirmar_foto),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, confirmar_texto_fallback)
+            ],
         },
-        fallbacks=[CommandHandler("start", start)]
+        fallbacks=fallbacks_comunes
     )
 
     conv_checkin = ConversationHandler(
@@ -2769,7 +2902,7 @@ def main():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, checkin_foto)
             ],
         },
-        fallbacks=[CommandHandler("start", start)]
+        fallbacks=fallbacks_comunes
     )
 
     app.add_handler(conv_start)
@@ -2778,6 +2911,8 @@ def main():
     app.add_handler(conv_checkin)
 
     # Handlers para Comandos y Botones Directos
+    app.add_handler(CommandHandler("cancelar", cancelar))
+    app.add_handler(MessageHandler(filters.Regex("^❌ Cancelar$"), cancelar))
     app.add_handler(CommandHandler("verapps", verapps))
     app.add_handler(MessageHandler(filters.Regex("^📱 Ver Apps$"), verapps))
     app.add_handler(CommandHandler("postular", postular))
