@@ -112,7 +112,7 @@ async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update and update.message:
         await update.message.reply_text(
-            "🛑 **Operación cancelada.**\n\nMenú principal restaurado:",
+            "🛑 Operación cancelada.\n\nMenú principal restaurado:",
             reply_markup=obtener_teclado_principal(user_id),
             parse_mode="Markdown"
         )
@@ -151,13 +151,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     await update.message.reply_text(
         "👋 ¡Bienvenido a **TestCoin**! 🚀\n\n"
-        "Somos una comunidad de desarrolladores y testers Android, unida para superar juntos el requisito de 14 días y 15 testers de Google Play Store.\n\n"
-        "✨ **Fase Inicial — Beta Gratuita & Programa Founders:**\n"
-        "• 🆓 **100% Gratuito:** Publicar tu aplicación es completamente libre (sin cobro de 800 créditos ni dinero).\n"
-        "• 🌟 **Programa Founder:** Completar pruebas válidas te otorga **Puntos Founder** canjeables por beneficios futuros.\n"
-        "• 🛡️ **Reputación Permanente:** Tu compromiso y puntualidad quedan registrados para siempre en tu perfil.\n"
-        "• 🤝 **Test for Test (T4T) Voluntario:** Podés probar apps de otros desarrolladores para ayudarlos y recibir apoyo mutuo, sin ninguna obligación forzosa para publicar.\n\n"
-        "Seleccioná tu rol con los botones de abajo para comenzar:",
+        "Comunidad para superar los 14 días y 15 testers de Google Play.\n\n"
+        "✨ **Fase Beta Founders:**\n"
+        "• 🆓 Publicación 100% gratuita\n"
+        "• ⭐ Puntos Founder y reputación permanente\n"
+        "• 🤝 Apoyo voluntario mutuo (T4T)\n\n"
+        "👇 Elige tu rol para comenzar:",
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
@@ -196,9 +195,9 @@ async def seleccion_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=referrer_id,
                     text=(
                         f"🎉 **¡Un nuevo amigo se registró con tu enlace!**\n\n"
-                        f"👤 **Nuevo usuario:** {nombre}\n"
-                        f"🎟️ **¡Ganaste 1 Boleto Extra para la Rifa Mensual!**\n"
-                        f"Boletos actuales: `{usuarios[referrer_id]['boletos_rifa']}`"
+                        f"👤 {nombre}\n"
+                        f"🎟️ +1 Boleto para la Rifa Mensual\n"
+                        f"Total boletos: `{usuarios[referrer_id]['boletos_rifa']}`"
                     ),
                     parse_mode="Markdown"
                 )
@@ -230,11 +229,11 @@ async def seleccion_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     rep_txt = db.formatear_reputacion(usuarios[user_id])
     respuesta = (
-        f"🎉 ¡Registro completado como **{rol.capitalize()}**, {nombre}!\n\n"
+        f"🎉 ¡Bienvenido **{nombre}** ({rol.capitalize()})!\n\n"
         f"🌟 **Fase Beta Founders:** Publicá tu app sin costo o colaborá voluntariamente en T4T.\n"
-        f"🪙 **Créditos:** {usuarios[user_id].get('creditos', 0)} | 🌟 **Puntos Founder:** {usuarios[user_id].get('puntos_founder', 0)}\n"
+        f"🪙 Créditos: {usuarios[user_id].get('creditos', 0)} | ⭐ Founders: {usuarios[user_id].get('puntos_founder', 0)}\n\n"
         f"🛡️ **Reputación:**\n{rep_txt}\n\n"
-        "👇 **¡Usá los botones de abajo para navegar sin escribir comandos!**"
+        "👇 Elige una opción en los botones de abajo:"
     )
 
     await update.message.reply_text(respuesta, reply_markup=obtener_teclado_principal(user_id), parse_mode="Markdown")
@@ -280,29 +279,27 @@ async def subirapp_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except db.ErrorPersistenciaPublicacion as exc:
             context.user_data["pub_estado_incierto"] = True
             await update.message.reply_text(
-                f"{exc}\n\nℹ️ **Estado incierto:** Tu solicitud conserva el identificador `{pub_app_id}` y sus datos. Podés reintentar con `/subirapp` o iniciar otra con `/subirapp nueva` (mientras la sesión permanezca en memoria).",
+                f"{exc}\n\n⚠️ Ocurrió un retraso al confirmar. Puedes reintentar con `/subirapp`.",
                 reply_markup=obtener_teclado_principal(user_id)
             )
             return ConversationHandler.END
 
         es_beta = resultado.get("es_beta") or db.es_beta_gratuita()
         txt_costo = (
-            "🪙 **Costo de publicación:** 0 créditos (Fase Beta Comunitaria Gratuita)\n"
-            "🌟 **Programa Founder:** Tus testers acumulan Puntos Founder y reputación permanente."
+            "🪙 Costo: 0 créditos (Fase Beta Comunitaria Gratuita)\n"
+            "⭐ Ganas Puntos Founder y reputación."
             if es_beta else
-            "🪙 **Créditos descontados:** 800\n"
-            "🎟️ **¡Ganaste 1 boleto extra para la Rifa Mensual!**"
+            "🪙 Créditos descontados: 800\n"
+            "🎟️ +1 boleto extra para la Rifa Mensual"
         )
         try:
             await update.message.reply_text(
                 f"🎉 **¡CAMPAÑA REGISTRADA EN LISTA DE ESPERA{' (BETA FOUNDERS)' if es_beta else ''}!**\n\n"
-                f"📱 **Link:** {app_link}\n"
-                f"📝 **Descripción:** {app_desc}\n"
-                f"🟡 **Estado:** `Reclutando Testers` (0/15 requeridos)\n"
+                f"📱 {app_desc}\n"
+                f"🟡 Estado: Reclutando (0/15 testers)\n"
                 f"{txt_costo}\n\n"
-                f"📌 **¿Qué sigue?**\n"
-                f"Tu app aparecerá en **📱 Ver Apps** como 🟡 *En lista de espera*. Cuando se unan **15 testers**, la app cambiará a 🟢 *Lista para Iniciar* y podrás dar el banderazo con `/iniciarprueba {pub_app_id}`.\n\n"
-                f"🆔 **ID de tu campaña:** `{pub_app_id}`",
+                f"👥 Al juntar 15 testers podrás iniciar con:\n"
+                f"`/iniciarprueba {pub_app_id}`",
                 reply_markup=obtener_teclado_principal(user_id)
             )
             context.user_data.pop("pub_app_id", None)
@@ -318,9 +315,8 @@ async def subirapp_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if pub_app_id and app_link and not app_desc:
         await update.message.reply_text(
-            f"ℹ️ **Solicitud pendiente en curso** (`{pub_app_id}`).\n"
-            f"🔗 **Link guardado:** {app_link}\n\n"
-            f"Paso 2/2 — Escribí una descripción breve de tu app:",
+            "ℹ️ Solicitud pendiente en curso.\n\n"
+            "📝 **Paso 2/2:** Envía una breve descripción de tu app:",
             parse_mode="Markdown"
         )
         return SUBIR_DESCRIPCION
@@ -345,11 +341,10 @@ async def subirapp_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if app_activa and app_activa.get("estado") in ["reclutando", "en_prueba"]:
                 await update.message.reply_text(
                     f"⚠️ **Límite de Campañas Activas (Fase Beta)**\n\n"
-                    f"Ya tenés una campaña activa en curso:\n"
-                    f"📱 **App:** {app_activa.get('descripcion')}\n"
-                    f"⚙️ **Estado:** `{app_activa.get('estado')}`\n\n"
-                    f"Durante la beta gratuita, para garantizar la disponibilidad de testers para toda la comunidad, se permite como máximo **1 campaña activa por desarrollador**.\n\n"
-                    f"Podrás publicar una nueva app cuando la actual finalice o sea cerrada en conciliación.",
+                    f"Ya tienes una campaña activa en curso:\n"
+                    f"📱 {app_activa.get('descripcion')}\n\n"
+                    f"Durante la beta gratuita se permite 1 campaña activa por desarrollador.\n"
+                    f"Podrás publicar otra cuando finalice la actual.",
                     reply_markup=obtener_teclado_principal(user_id),
                     parse_mode="Markdown"
                 )
@@ -365,13 +360,9 @@ async def subirapp_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await update.message.reply_text(
                     f"⚠️ **Créditos insuficientes**\n\n"
-                    f"Publicar una campaña requiere 🪙 **800 créditos** (Tu saldo actual: **{creditos} créditos**).\n\n"
-                    f"¿Cómo obtener créditos?\n\n"
-                    f"1️⃣ **Trabajar en la plataforma (Gratis):**\n"
-                    f"   Ganá créditos testeando aplicaciones tocando el botón **📱 Ver Apps**.\n\n"
-                    f"2️⃣ **Comprar créditos con dinero:**\n"
-                    f"   Recargá 800 créditos por **$800 MXN** usando `/comprarcreditos`.\n\n"
-                    f"💡 Una vez que tengas 800 créditos, tocá el botón **🚀 Subir App** de nuevo.",
+                    f"Publicar una campaña requiere 🪙 **800 créditos** (Tienes: {creditos}).\n\n"
+                    f"1️⃣ Testea apps tocando **📱 Ver Apps** para ganar créditos gratis.\n"
+                    f"2️⃣ O recarga 800 créditos por $800 MXN con `/comprarcreditos`.",
                     reply_markup=obtener_teclado_principal(user_id),
                     parse_mode="Markdown"
                 )
@@ -382,16 +373,16 @@ async def subirapp_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     cabecera = (
         "🚀 **Publicar nueva campaña — Fase Beta Comunitaria & Founders**\n"
-        "✨ ¡Publicación 100% gratuita! Sin costo en créditos ni dinero.\n\n"
+        "✨ ¡Publicación 100% gratuita!\n\n"
         if es_beta_activa else
         "📲 **Publicar nueva campaña en TestCoin**\n\n"
     )
 
     await update.message.reply_text(
         f"{cabecera}"
-        "Paso 1/2 — Enviá el **link o URL** de tu aplicación en Google Play Store:\n"
-        "(Ejemplo: `https://play.google.com/store/apps/details?id=com.tuapp`)\n\n"
-        "💡 _Tocá_ **❌ Cancelar** _si deseás volver al menú principal._",
+        "📱 **Paso 1/2:** Envía el enlace de tu app en Google Play Store:\n"
+        "Ejemplo: `https://play.google.com/store/apps/details?id=com.ejemplo`\n\n"
+        "💡 _O toca_ **❌ Cancelar** _para volver al menú._",
         reply_markup=ReplyKeyboardMarkup([["❌ Cancelar"]], resize_keyboard=True),
         parse_mode="Markdown"
     )
@@ -410,7 +401,7 @@ async def subirapp_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if link_enviado in ["❌ Cancelar", "/cancelar", "cancelar", "salir"]:
             await update.message.reply_text(
-                "🛑 **Publicación cancelada.**\n\nMenú principal restaurado:",
+                "🛑 Publicación cancelada.\n\nMenú principal restaurado:",
                 reply_markup=obtener_teclado_principal(user_id),
                 parse_mode="Markdown"
             )
@@ -453,9 +444,9 @@ async def subirapp_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not (link_enviado.startswith("http://") or link_enviado.startswith("https://") or "play.google.com" in link_enviado):
         await update.message.reply_text(
-            "⚠️ Por favor enviá un enlace válido de Google Play Store.\n"
-            "Ejemplo: `https://play.google.com/store/apps/details?id=com.miempresa.miapp`\n\n"
-            "💡 _Si querés salir, tocá_ **❌ Cancelar** _o enviá_ `/cancelar`.",
+            "⚠️ Por favor envía un enlace válido de Google Play Store.\n"
+            "Ejemplo: `https://play.google.com/store/apps/details?id=com.ejemplo`\n\n"
+            "💡 _O toca_ **❌ Cancelar** _para salir._",
             reply_markup=ReplyKeyboardMarkup([["❌ Cancelar"]], resize_keyboard=True),
             parse_mode="Markdown"
         )
@@ -463,9 +454,9 @@ async def subirapp_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["app_link"] = link_enviado
     await update.message.reply_text(
-        "✅ **Link recibido y guardado con éxito.**\n\n"
-        "Paso 2/2 — Escribí una descripción breve de tu app (qué hace, qué características deben probar los testers):\n\n"
-        "💡 _Si querés salir, tocá_ **❌ Cancelar** _o enviá_ `/cancelar`.",
+        "✅ Enlace guardado con éxito.\n\n"
+        "📝 **Paso 2/2:** Envía una breve descripción de tu app:\n\n"
+        "💡 _O toca_ **❌ Cancelar** _para salir._",
         reply_markup=ReplyKeyboardMarkup([["❌ Cancelar"]], resize_keyboard=True),
         parse_mode="Markdown"
     )
@@ -483,7 +474,7 @@ async def subirapp_descripcion(update: Update, context: ContextTypes.DEFAULT_TYP
         context.user_data.pop("app_descripcion", None)
         context.user_data.pop("pub_estado_incierto", None)
         await update.message.reply_text(
-            "🛑 **Publicación cancelada.**\n\nMenú principal restaurado:",
+            "🛑 Publicación cancelada.\n\nMenú principal restaurado:",
             reply_markup=obtener_teclado_principal(user_id),
             parse_mode="Markdown"
         )
@@ -521,30 +512,28 @@ async def subirapp_descripcion(update: Update, context: ContextTypes.DEFAULT_TYP
     except db.ErrorPersistenciaPublicacion as exc:
         context.user_data["pub_estado_incierto"] = True
         await update.message.reply_text(
-            f"{exc}\n\nℹ️ **Estado incierto:** Tu solicitud conserva el identificador `{app_id}` y sus datos. Podés reintentar con `/subirapp` o iniciar otra con `/subirapp nueva` (mientras la sesión permanezca en memoria).",
+            f"{exc}\n\n⚠️ Ocurrió un retraso al confirmar. Puedes reintentar con `/subirapp`.",
             reply_markup=obtener_teclado_principal(user_id)
         )
         return ConversationHandler.END
 
     es_beta_pub = resultado.get("es_beta") or db.es_beta_gratuita()
     txt_costo_desc = (
-        "🪙 **Costo de publicación:** 0 créditos (Fase Beta Comunitaria Gratuita)\n"
-        "🌟 **Programa Founder:** Tus testers recibirán Puntos Founder y reputación permanente."
+        "🪙 Costo: 0 créditos (Fase Beta Comunitaria Gratuita)\n"
+        "⭐ Ganas Puntos Founder y reputación."
         if es_beta_pub else
-        "🪙 **Créditos descontados:** 800\n"
-        "🎟️ **¡Ganaste 1 boleto extra para la Rifa Mensual!**"
+        "🪙 Créditos descontados: 800\n"
+        "🎟️ +1 boleto extra para la Rifa Mensual"
     )
 
     try:
         await update.message.reply_text(
             f"🎉 **¡CAMPAÑA REGISTRADA EN LISTA DE ESPERA{' (BETA FOUNDERS)' if es_beta_pub else ''}!**\n\n"
-            f"📱 **Link:** {app_link}\n"
-            f"📝 **Descripción:** {descripcion_enviada}\n"
-            f"🟡 **Estado:** `Reclutando Testers` (0/15 requeridos)\n"
+            f"📱 {descripcion_enviada}\n"
+            f"🟡 Estado: Reclutando (0/15 testers)\n"
             f"{txt_costo_desc}\n\n"
-            f"📌 **¿Qué sigue?**\n"
-            f"Tu app aparecerá en **📱 Ver Apps** como 🟡 *En lista de espera*. Cuando se unan **15 testers**, la app cambiará a 🟢 *Lista para Iniciar* y podrás dar el banderazo con `/iniciarprueba {app_id}`.\n\n"
-            f"🆔 **ID de tu campaña:** `{app_id}`",
+            f"👥 Al juntar 15 testers podrás iniciar con:\n"
+            f"`/iniciarprueba {app_id}`",
             reply_markup=obtener_teclado_principal(user_id)
         )
         context.user_data.pop("pub_app_id", None)
@@ -578,14 +567,13 @@ async def verapps(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "📱 **Catálogo de Apps**\n\n"
             "Por el momento no hay aplicaciones buscando testers.\n"
-            "¡Volvé a consultar más tarde!",
+            "¡Vuelve a consultar pronto!",
             reply_markup=obtener_teclado_principal(user_id),
             parse_mode="Markdown"
         )
         return
 
-    mensaje = "📱 **Apps disponibles para Testear**\n\n"
-    mensaje += "Cada campaña reúne sus participantes. Al completarlos, el desarrollador podrá iniciar la prueba conjunta de 14 días:\n\n"
+    mensaje = "📱 **Apps disponibles para Testear:**\n\n"
 
     for app_id, datos in apps_disponibles:
         num_testers = len(datos.get("testers", []))
@@ -593,14 +581,12 @@ async def verapps(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if max_t is None:
             max_t = datos.get("min_testers") or 12
         quedan = max_t - num_testers
-        indicador = f"🟡 **Reclutando:** `{num_testers}/{max_t}` inscritos (*Quedan {quedan} plazas*)"
 
         mensaje += (
-            f"🔹 **{datos.get('descripcion', 'Sin descripción')}**\n"
-            f"🔗 **Link:** {datos.get('link')}\n"
-            f"📊 **Estado:** {indicador}\n"
-            f"🆔 **ID:** `{app_id}`\n"
-            f"👉 Para unirte escribí: `/postular {app_id}`\n\n"
+            f"📱 **{datos.get('descripcion', 'App')}**\n"
+            f"👥 `{num_testers}/{max_t}` inscritos (Quedan {quedan} plazas)\n"
+            f"🔗 {datos.get('link')}\n"
+            f"👉 Unirse: `/postular {app_id}`\n\n"
         )
 
     await update.message.reply_text(mensaje, reply_markup=obtener_teclado_principal(user_id), parse_mode="Markdown")
@@ -613,8 +599,9 @@ async def postular(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not context.args or len(context.args) != 1:
         await update.message.reply_text(
-            "⚠️ Uso: /postular <app_id>\nPodés consultar el ID en 📱 Ver Apps.",
-            reply_markup=teclado
+            "⚠️ Uso: `/postular <app_id>`\nConsulta las apps en **📱 Ver Apps**.",
+            reply_markup=teclado,
+            parse_mode="Markdown"
         )
         return
 
@@ -632,23 +619,25 @@ async def postular(update: Update, context: ContextTypes.DEFAULT_TYPE):
     completa = resultado["completa"]
     min_t = resultado.get("min_testers", 15)
     max_t = resultado.get("max_testers", min_t)
+    app_desc = resultado.get("descripcion", app_id)
     mensaje = (
-        f"✅ Postulación aceptada en la campaña {app_id}.\n"
-        f"👥 Testers inscritos: {resultado['total']}/{max_t}.\n"
+        f"✅ Postulación aceptada en **{app_desc}**.\n"
+        f"👥 Testers: {resultado['total']}/{max_t}\n"
     )
     if completa:
-        mensaje += f"La campaña ya reunió los {min_t} participantes necesarios y está lista para iniciar.\n"
-    mensaje += "Esperá el aviso de inicio del desarrollador antes de confirmar la instalación."
-    await update.message.reply_text(mensaje, reply_markup=teclado)
+        mensaje += f"🎉 ¡Cupo completo ({min_t}/{min_t})! Lista para iniciar.\n"
+    mensaje += "⏳ Te avisaremos cuando el desarrollador inicie la prueba."
+    await update.message.reply_text(mensaje, reply_markup=teclado, parse_mode="Markdown")
 
     if completa:
         try:
             await context.bot.send_message(
                 chat_id=resultado["dev_id"],
                 text=(
-                    f"✅ La campaña {app_id} ya reunió los {min_t} testers necesarios.\n"
-                    f"La prueba todavía no ha iniciado. Podés iniciarla con /iniciarprueba {app_id}."
-                )
+                    f"🎉 Tu campaña **{app_desc}** ya reunió los {min_t} testers necesarios.\n\n"
+                    f"🚀 Inicia la prueba con:\n`/iniciarprueba {app_id}`"
+                ),
+                parse_mode="Markdown"
             )
         except Exception:
             logger.warning(f"No se pudo notificar al desarrollador que su campaña reunió los {min_t} testers.")
@@ -660,9 +649,8 @@ async def iniciarprueba(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not context.args:
         await update.message.reply_text(
-            "⚠️ Especificá el ID de la campaña a iniciar.\n"
-            "Ejemplo: `/iniciarprueba app_12345_1`\n\n"
-            "Podés ver tus campañas tocando **📢 Mis Campañas**.",
+            "⚠️ Especifica la campaña a iniciar.\n"
+            "Consulta tus apps en **📢 Mis Campañas**.",
             reply_markup=obtener_teclado_principal(user_id),
             parse_mode="Markdown"
         )
@@ -687,8 +675,8 @@ async def iniciarprueba(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if num_testers < min_testers:
         await update.message.reply_text(
             f"🟡 **Aún no juntás los {min_testers} testers mínimos**\n\n"
-            f"Actualmente tenés `{num_testers}/{min_testers}` testers inscritos.\n"
-            f"Esperá a que la lista de espera se llene para iniciar de forma pareja.",
+            f"👥 Inscritos: `{num_testers}/{min_testers}` testers.\n"
+            f"⏳ Te avisaremos cuando se llene el cupo para iniciar juntos.",
             reply_markup=obtener_teclado_principal(user_id),
             parse_mode="Markdown"
         )
@@ -708,11 +696,10 @@ async def iniciarprueba(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         f"🚀 **¡PRUEBA INICIADA EXITOSAMENTE!**\n\n"
-        f"📱 **App:** {app.get('descripcion')}\n"
-        f"👥 **Testers participantes:** `{num_testers}`\n"
-        f"📅 **Fecha de lanzamiento:** `{fecha_hoy}`\n"
-        f"⏰ **Vencimiento 1ª entrega (instalación):** `{fecha_v1}` a las **17:00:00** (America/Mexico_City)\n\n"
-        f"📢 Se les notificó automáticamente a todos los testers para que descarguen la app e instalen de forma pareja.",
+        f"📱 **{app.get('descripcion')}**\n"
+        f"👥 Testers: `{num_testers}`\n"
+        f"⏰ 1ª entrega (instalación) vence: {fecha_v1} a las 5:00 PM\n\n"
+        f"📢 Se notificó a todos los testers para instalar la app.",
         reply_markup=obtener_teclado_principal(user_id),
         parse_mode="Markdown"
     )
@@ -722,13 +709,12 @@ async def iniciarprueba(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(
                 chat_id=tester_id,
                 text=(
-                    f"🚀 **¡LA PRUEBA DE LA APP HA INICIADO HOY!** 🟢\n\n"
-                    f"El desarrollador dio el banderazo de salida para la app **{app.get('descripcion')}**.\n\n"
-                    f"📌 **Pasos a seguir hoy:**\n"
-                    f"1. Descargá e instalá la app desde Google Play Store: {app.get('link')}\n"
-                    f"2. Sacale una captura de pantalla donde se vea instalada.\n"
-                    f"3. Enviá tu captura tocando el botón **📸 Confirmar Instalación**.\n\n"
-                    f"⏰ **HORARIO DE CORTE:** La 1ª entrega (instalación) vence el **{fecha_v1} a las 5:00 PM** (America/Mexico_City)."
+                    f"🚀 **¡La prueba ha iniciado!** 🟢\n\n"
+                    f"App: **{app.get('descripcion')}**\n\n"
+                    f"1️⃣ Instala la app desde Google Play:\n{app.get('link')}\n"
+                    f"2️⃣ Toma captura de pantalla donde se vea instalada.\n"
+                    f"3️⃣ Envía tu captura tocando **📸 Confirmar Instalación**.\n\n"
+                    f"⏰ Límite de entrega: **{fecha_v1} a las 5:00 PM**"
                 ),
                 parse_mode="Markdown"
             )
@@ -798,11 +784,10 @@ async def confirmar_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     reply_markup_cancel = ReplyKeyboardMarkup([["❌ Cancelar"]], resize_keyboard=True) if "ReplyKeyboardMarkup" in globals() else ReplyKeyboardRemove()
     await update.message.reply_text(
-        f"📸 **Confirmar Instalación de la App**\n\n"
+        f"📸 **Confirmar Instalación**\n\n"
         f"📱 **App:** {app_info.get('descripcion', app_id)}\n"
-        f"📅 **Vencimiento 1ª entrega:** `{fecha_v1}` a las **5:00 PM** (America/Mexico_City)\n\n"
-        f"Por favor, enviá una **captura de pantalla** donde se vea la aplicación instalada en tu teléfono.\n\n"
-        f"💡 _Si querés salir, tocá_ **❌ Cancelar** _o enviá_ `/cancelar`.",
+        f"⏰ Límite: {fecha_v1} a las 5:00 PM\n\n"
+        f"📷 Envía una captura de pantalla donde se vea la app instalada en tu teléfono.",
         reply_markup=reply_markup_cancel,
         parse_mode="Markdown"
     )
@@ -818,8 +803,7 @@ async def confirmar_texto_fallback(update: Update, context: ContextTypes.DEFAULT
 
     reply_markup_cancel = ReplyKeyboardMarkup([["❌ Cancelar"]], resize_keyboard=True) if "ReplyKeyboardMarkup" in globals() else ReplyKeyboardRemove()
     await update.message.reply_text(
-        "⚠️ Para confirmar la instalación, debés enviar una **foto / captura de pantalla** de la app instalada.\n\n"
-        "💡 _Si querés salir, tocá_ **❌ Cancelar** _o enviá_ `/cancelar`.",
+        "📷 Por favor envía una captura de pantalla de la app instalada.",
         reply_markup=reply_markup_cancel,
         parse_mode="Markdown"
     )
@@ -863,12 +847,10 @@ async def confirmar_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         f"✅ **¡Instalación confirmada exitosamente!**\n\n"
-        f"📱 **App:** {app_desc}\n"
-        f"📅 **Vencimiento satisfecho:** `{resultado.get('fecha_vencimiento')}`\n"
-        f"⏱️ **Evaluación de entrega:** `{est_txt}`\n"
-        f"⏳ **Días activos requeridos:** 14 días\n"
-        f"📊 **Días completados (puntuales):** `{1 if est_ent == 'puntual' else 0}/14`\n\n"
-        f"💡 Usá el botón **📝 Check-in Diario** todos los días antes de las 5:00 PM.",
+        f"📱 {app_desc}\n"
+        f"⏱️ Entrega: {est_txt}\n"
+        f"📊 Progreso: `{1 if est_ent == 'puntual' else 0}/14` días\n\n"
+        f"💡 Recuerda enviar tu **📝 Check-in Diario** cada día antes de las 5:00 PM.",
         reply_markup=obtener_teclado_principal(user_id),
         parse_mode="Markdown"
     )
@@ -880,9 +862,8 @@ async def confirmar_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=dev_id,
                 text=(
                     f"🔔 **¡Nuevo tester activado!**\n\n"
-                    f"👤 Tester **{nombre}** ha confirmed la instalación de tu app:\n"
-                    f"📝 **App:** {app_desc}\n"
-                    f"📅 **Fecha de inicio:** `{fecha_hoy}`"
+                    f"👤 {nombre} confirmó la instalación en:\n"
+                    f"📱 {app_desc}"
                 ),
                 parse_mode="Markdown"
             )
@@ -906,7 +887,7 @@ async def checkin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not apps_testeando:
         await update.message.reply_text(
-            "❌ No estás probando ninguna aplicación. Tocá el botón **📱 Ver Apps** para unirte.",
+            "📱 No estás probando ninguna aplicación. Toca **📱 Ver Apps** para unirte.",
             reply_markup=obtener_teclado_principal(user_id),
             parse_mode="Markdown"
         )
@@ -923,11 +904,11 @@ async def checkin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if prueba.get("estado") == "completada":
         context.user_data.pop("checkin_app_id", None)
-        await update.message.reply_text("✅ Ya completaste esta prueba. No necesitás realizar más check-ins; tu progreso se conserva.", reply_markup=obtener_teclado_principal(user_id))
+        await update.message.reply_text("✅ Ya completaste esta prueba con éxito.", reply_markup=obtener_teclado_principal(user_id))
         return ConversationHandler.END
 
     if not prueba or prueba.get("estado") != "instalada":
-        await update.message.reply_text("⚠️ Primero debes enviar tu captura inicial tocando el botón **📸 Confirmar Instalación**.", reply_markup=obtener_teclado_principal(user_id), parse_mode="Markdown")
+        await update.message.reply_text("⚠️ Primero debes enviar tu captura inicial tocando **📸 Confirmar Instalación**.", reply_markup=obtener_teclado_principal(user_id), parse_mode="Markdown")
         return ConversationHandler.END
 
     fn_parse = getattr(db, "parse_dt_mexico", None)
@@ -965,9 +946,9 @@ async def checkin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
         await update.message.reply_text(
-            f"📝 **Seleccioná la entrega a completar para {app.get('descripcion')}:**\n\n"
-            f"1️⃣ **Evidencia tardía:** Fecha `{fecha_anterior}` (vencimiento anterior no entregado)\n"
-            f"2️⃣ **Entrega actualmente abierta:** Fecha `{fecha_actual}` (vence hoy a las 5:00 PM)",
+            f"📝 **Selecciona la entrega para {app.get('descripcion')}:**\n\n"
+            f"1️⃣ ⚠️ Evidencia tardía: `{fecha_anterior}`\n"
+            f"2️⃣ ✅ Entrega de hoy: `{fecha_actual}` (vence a las 5:00 PM)",
             reply_markup=reply_markup,
             parse_mode="Markdown"
         )
@@ -975,11 +956,10 @@ async def checkin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["checkin_vencimiento"] = fecha_actual
     await update.message.reply_text(
-        f"📸 **Check-in Diario de Prueba**\n\n"
-        f"📱 **App:** {app.get('descripcion')}\n"
-        f"📅 **Vencimiento que completás:** `{fecha_actual}` (17:00:00 America/Mexico_City)\n"
-        f"📊 **Progreso puntual verificado:** `{prueba.get('dias_completados', 1)}/14` días.\n\n"
-        f"Por favor, enviá una captura de pantalla del día de hoy mostrando la aplicación instalada en tu teléfono.",
+        f"📝 **Check-in Diario**\n\n"
+        f"📱 {app.get('descripcion')}\n"
+        f"📊 Progreso: `{prueba.get('dias_completados', 1)}/14` días\n\n"
+        f"📷 Envía tu captura de pantalla de hoy:",
         reply_markup=ReplyKeyboardRemove(),
         parse_mode="Markdown"
     )
@@ -998,11 +978,11 @@ async def checkin_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         fecha_act = context.user_data.get("opcion_fecha_actual")
         if fecha_ant and fecha_ant in texto:
             context.user_data["checkin_vencimiento"] = fecha_ant
-            await update.message.reply_text(f"✅ Seleccionaste entregar evidencia tardía para `{fecha_ant}`.\nPor favor enviá la captura de pantalla ahora:", reply_markup=ReplyKeyboardRemove(), parse_mode="Markdown")
+            await update.message.reply_text(f"✅ Seleccionaste evidencia tardía para `{fecha_ant}`.\nEnvía la captura de pantalla:", reply_markup=ReplyKeyboardRemove(), parse_mode="Markdown")
             return CHECKIN_FOTO
         elif fecha_act and fecha_act in texto:
             context.user_data["checkin_vencimiento"] = fecha_act
-            await update.message.reply_text(f"✅ Seleccionaste entregar evidencia para la fecha abierta `{fecha_act}`.\nPor favor enviá la captura de pantalla ahora:", reply_markup=ReplyKeyboardRemove(), parse_mode="Markdown")
+            await update.message.reply_text(f"✅ Seleccionaste entrega de hoy `{fecha_act}`.\nEnvía la captura de pantalla:", reply_markup=ReplyKeyboardRemove(), parse_mode="Markdown")
             return CHECKIN_FOTO
 
     photos = getattr(update.message, "photo", None) if update and hasattr(update, "message") else None
@@ -1011,8 +991,8 @@ async def checkin_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if texto_chk in BOTONES_MENU_TEXTOS or texto_chk.lower() in ["cancelar", "/cancelar", "salir"]:
             return await cancelar(update, context)
         await update.message.reply_text(
-            "❌ Por favor enviá una captura de pantalla de la aplicación.\n\n"
-            "💡 _O tocá_ **❌ Cancelar** _para volver al menú principal._",
+            "📷 Por favor envía una captura de pantalla de la aplicación.\n\n"
+            "💡 _O toca_ **❌ Cancelar** _para volver al menú._",
             reply_markup=ReplyKeyboardMarkup([["❌ Cancelar"]], resize_keyboard=True),
             parse_mode="Markdown"
         )
@@ -1035,15 +1015,15 @@ async def checkin_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     res_tipo = resultado.get("resultado")
     if res_tipo == "duplicado":
-        await update.message.reply_text("⚠️ Esta fotografía/mensaje ya fue procesada anteriormente.", reply_markup=obtener_teclado_principal(user_id))
+        await update.message.reply_text("⚠️ Esta foto ya fue procesada anteriormente.", reply_markup=obtener_teclado_principal(user_id))
         return ConversationHandler.END
 
     if res_tipo == "actualizado":
         estado_ent = resultado.get("estado_entrega", "puntual")
         await update.message.reply_text(
-            f"ℹ️ **Captura actualizada para la fecha {resultado.get('fecha_vencimiento')}**\n\n"
-            f"📌 Estado registrado: `{estado_ent.capitalize()}`\n"
-            f"Se guardó la nueva foto en versiones anteriores sin alterar el contador ni la puntualidad original.",
+            f"ℹ️ **Captura actualizada ({resultado.get('fecha_vencimiento')})**\n\n"
+            f"📌 Entrega: `{estado_ent.capitalize()}`\n"
+            f"Se guardó la nueva foto correctamente.",
             reply_markup=obtener_teclado_principal(user_id),
             parse_mode="Markdown"
         )
@@ -1063,22 +1043,20 @@ async def checkin_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if res_tipo == "completada":
         if es_beta:
             await update.message.reply_text(
-                f"🎉 **¡FELICITACIONES! HAS COMPLETADO LOS 14 DÍAS DE PRUEBA** 🏆\n\n"
-                f"📱 **App:** {app.get('descripcion')}\n"
-                f"🌟 **Recompensa Otorgada:** +100 Puntos Founder\n\n"
-                f"✅ *Liquidación Auditada (5D/6A):* Recompensa verificada y acreditada transaccionalmente.\n\n"
-                f"¡Muchas gracias por contribuir a la comunidad TestCoin!",
+                f"🎉 **¡FELICITACIONES! COMPLETÓ LOS 14 DÍAS DE PRUEBA** 🏆\n\n"
+                f"📱 {app.get('descripcion')}\n"
+                f"🌟 Recompensa Otorgada: +100 Puntos Founder\n\n"
+                f"¡Muchas gracias por contribuir a la comunidad!",
                 reply_markup=obtener_teclado_principal(user_id),
                 parse_mode="Markdown"
             )
         else:
             await update.message.reply_text(
-                f"🎉 **¡FELICITACIONES! HAS COMPLETADO LOS 14 DÍAS DE PRUEBA** 🏆\n\n"
-                f"📱 **App:** {app.get('descripcion')}\n"
-                f"🪙 **Recompensa Otorgada:** +800 Créditos\n"
-                f"🎟️ **Premio Extra:** +1 Boleto para la Rifa Mensual\n\n"
-                f"✅ *Liquidación Auditada (5D):* Recompensa verificada y acreditada transaccionalmente.\n\n"
-                f"¡Muchas gracias por contribuir a la comunidad TestCoin!",
+                f"🎉 **¡FELICITACIONES! COMPLETÓ LOS 14 DÍAS DE PRUEBA** 🏆\n\n"
+                f"📱 {app.get('descripcion')}\n"
+                f"🪙 Recompensa Otorgada: +800 Créditos\n"
+                f"🎟️ Extra: +1 Boleto para la Rifa Mensual\n\n"
+                f"¡Muchas gracias por contribuir a la comunidad!",
                 reply_markup=obtener_teclado_principal(user_id),
                 parse_mode="Markdown"
             )
@@ -1089,10 +1067,10 @@ async def checkin_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(
                     chat_id=dev_id,
                     text=(
-                        f"🏆 **¡Un tester ha completado exitosamente los 14 días!**\n\n"
-                        f"👤 Tester: **{nombre}**\n"
-                        f"📝 App: {app.get('descripcion')}\n"
-                        f"✅ 14 días de prueba cumplidos satisfactoriamente."
+                        f"🏆 **¡Un tester completó los 14 días!**\n\n"
+                        f"👤 {nombre}\n"
+                        f"📱 {app.get('descripcion')}\n"
+                        f"✅ 14 días cumplidos satisfactoriamente."
                     ),
                     parse_mode="Markdown"
                 )
@@ -1110,20 +1088,19 @@ async def checkin_foto(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 txt_meta = (
                     "🎉 **¡Has completado tus 14 días de prueba requeridos!**\n"
-                    "🪙 Tu prueba pasará a conciliación para acreditar tus 800 créditos y 1 boleto de rifa."
+                    "🪙 Recibirás **800 Créditos** y 1 Boleto para la Rifa tras la conciliación."
                 )
         else:
             if es_beta:
-                txt_meta = f"💡 ¡Faltan sólo {dias_restantes} días para completar tu prueba y ser elegible para tus 100 Puntos Founder al conciliar!"
+                txt_meta = f"💡 ¡Faltan sólo {dias_restantes} días para tus 100 Puntos Founder!"
             else:
-                txt_meta = f"💡 ¡Faltan sólo {dias_restantes} días para obtener tus 800 créditos!"
+                txt_meta = f"💡 ¡Faltan sólo {dias_restantes} días para tus 800 Créditos!"
 
         await update.message.reply_text(
-            f"✅ **¡Check-in diario registrado exitosamente!**\n\n"
-            f"📱 **App:** {app.get('descripcion')}\n"
-            f"📅 **Vencimiento satisfecho:** `{resultado.get('fecha_vencimiento')}`\n"
-            f"⏱️ **Evaluación:** `{estado_icon}`\n"
-            f"📊 **Progreso puntual verificado:** `{dias_actuales}/14` días.\n\n"
+            f"✅ **Check-in registrado**\n\n"
+            f"📱 {app.get('descripcion')}\n"
+            f"⏱️ Entrega: {estado_icon}\n"
+            f"📊 Progreso: `{dias_actuales}/14` días\n\n"
             f"{txt_meta}",
             reply_markup=obtener_teclado_principal(user_id),
             parse_mode="Markdown"
@@ -1148,13 +1125,10 @@ async def referidos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     boletos = usuarios[user_id].get("boletos_rifa", 0)
 
     await update.message.reply_text(
-        f"👥 **Programa de Referidos — TestCoin**\n\n"
-        f"¡Invitá amigos a la plataforma y ganá boletos extra para la Rifa Mensual!\n\n"
-        f"🔗 **Tu enlace de referido único:**\n`{link_referido}`\n\n"
-        f"📊 **Tus Estadísticas:**\n"
-        f"• Amigos invitados: `{len(mis_referidos)}` usuarios\n"
-        f"• Boletos de rifa acumulados: `{boletos}` boletos\n\n"
-        f"🎁 Por cada amigo que se registre con tu enlace, ¡ambos ganan **+1 boleto extra** para el sorteo mensual!",
+        f"👥 **Programa de Referidos** 🎟️\n\n"
+        f"Comparte tu enlace con amigos. Ambos reciben **+1 boleto extra**:\n\n"
+        f"🔗 `{link_referido}`\n\n"
+        f"📊 Invitados: `{len(mis_referidos)}` | 🎟️ Boletos: `{boletos}`",
         reply_markup=obtener_teclado_principal(user_id),
         parse_mode="Markdown"
     )
@@ -1172,11 +1146,9 @@ async def rifa(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if db.es_beta_gratuita():
         await update.message.reply_text(
             f"🎟️ **Rifa Mensual — Pausada durante la Beta Gratuita**\n\n"
-            f"Durante la fase beta comunitaria, la emisión y los sorteos de rifas se encuentran temporalmente en pausa.\n\n"
+            f"Durante la beta, los premios son en Puntos Founder y reputación.\n\n"
             f"📊 **Tus Boletos Acumulados:** `{boletos_usuario}` boletos\n"
-            f"🔒 Tus boletos históricos están a salvo y se conservarán para cuando se reanude el programa.\n\n"
-            f"🌟 **Recompensas en la Beta:**\n"
-            f"En esta fase, tus participaciones se premian con **Puntos Founder** y reputación inmutable.",
+            f"🔒 Se conservan para cuando se reanude el sorteo.",
             reply_markup=obtener_teclado_principal(user_id),
             parse_mode="Markdown"
         )
@@ -1184,14 +1156,12 @@ async def rifa(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         f"🎟️ **Rifa Mensual TestCoin**\n\n"
-        f"Todos los usuarios activos participan automáticamente en el sorteo mensual.\n\n"
-        f"📊 **Tus Boletos:** `{boletos_usuario}` boletos\n"
-        f"🌐 **Total de boletos en el bombo:** `{total_boletos}` boletos\n"
-        f"🎲 **Tu probabilidad actual:** `{probabilidad:.1f}%`\n\n"
-        f"💡 **¿Cómo conseguir más boletos?**\n"
-        f"• Publicá una campaña (+1 boleto)\n"
-        f"• Completá los 14 días de prueba (+1 boleto)\n"
-        f"• Invitá amigos tocando el botón **👥 Referidos** (+1 boleto por cada uno)",
+        f"📊 Tus boletos: `{boletos_usuario}`\n"
+        f"🌐 Boletos totales: `{total_boletos}`\n"
+        f"🎲 Probabilidad: `{probabilidad:.1f}%`\n\n"
+        f"💡 **Gana más boletos:**\n"
+        f"• Completando 14 días (+1 boleto)\n"
+        f"• Invitando amigos en **👥 Referidos** (+1 boleto)",
         reply_markup=obtener_teclado_principal(user_id),
         parse_mode="Markdown"
     )
@@ -1223,12 +1193,9 @@ async def hacerifa(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ganador = usuarios[ganador_id]
 
     await update.message.reply_text(
-        f"🎉 **¡RESULTADOS DE LA RIFA MENSUAL TESTCOIN!** 🏆\n\n"
-        f"🎟️ **Total de boletos participantes:** `{len(bombo)}`\n"
-        f"👑 **¡GANADOR DEL SORTEO!**\n"
-        f"👤 **Nombre:** {ganador.get('nombre')}\n"
-        f"🆔 **ID:** `{ganador_id}`\n"
-        f"🎟️ **Boletos acumulados:** `{ganador.get('boletos_rifa')}` boletos",
+        f"🎉 **¡GANADOR DE LA RIFA MENSUAL!** 🏆\n\n"
+        f"👑 {ganador.get('nombre')} ({ganador.get('boletos_rifa')} boletos)\n"
+        f"🎟️ Boletos participantes: {len(bombo)}",
         reply_markup=obtener_teclado_principal(user_id),
         parse_mode="Markdown"
     )
@@ -1255,15 +1222,12 @@ async def miscreditos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     usuario = usuarios[user_id]
     rep_txt = db.formatear_reputacion(usuario)
     await update.message.reply_text(
-        f"📊 **Estado de tu Cuenta — TestCoin (Beta & Founders)**\n\n"
-        f"👤 **Usuario:** {usuario.get('nombre')}\n"
-        f"🏷️ **Rol:** {usuario.get('rol', 'Sin definir').capitalize()}\n"
+        f"📊 **Mis Créditos & Puntos**\n\n"
+        f"👤 {usuario.get('nombre')} ({usuario.get('rol', 'Tester').capitalize()})\n"
         f"🌟 **Puntos Founder:** `{usuario.get('puntos_founder', 0)}` pts\n"
         f"🪙 **Créditos tradicionales:** `{usuario.get('creditos', 0)}` créditos\n"
-        f"🎟️ **Boletos para Rifa Mensual:** `{usuario.get('boletos_rifa', 0)}`\n"
-        f"⚠️ **Advertencias recibidas:** `{usuario.get('advertencias', 0)}`\n\n"
-        f"🛡️ **Reputación Permanente:**\n{rep_txt}\n\n"
-        f"🤝 **T4T Comunitario:** Probá apps voluntariamente con **📱 Ver Apps** para ganar Puntos Founder y mejorar tu reputación.",
+        f"🎟️ Boletos rifa: `{usuario.get('boletos_rifa', 0)}`\n\n"
+        f"🛡️ **Reputación Permanente:**\n{rep_txt}",
         reply_markup=obtener_teclado_principal(user_id),
         parse_mode="Markdown"
     )
@@ -1275,16 +1239,15 @@ async def t4t_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     usuario = usuarios.get(user_id, {})
     rep_txt = db.formatear_reputacion(usuario) if usuario else "Registrate con /start para ver tu reputación."
     await update.message.reply_text(
-        "🤝 **Comunidad Test for Test (T4T) — TestCoin**\n\n"
-        "El programa T4T es una iniciativa de apoyo mutuo y voluntario entre desarrolladores Android:\n\n"
-        "• 🆓 **Libertad absoluta:** Publicar tu app es 100% gratuito. No estás forzado a testear apps de otros para poder publicar la tuya.\n"
-        "• 🔄 **Reciprocidad voluntaria:** Al probar las apps de otros miembros, incentivás a que ellos prueben la tuya, completando tus 15 testers mucho más rápido.\n"
-        "• 🌟 **Puntos Founder:** Cada campaña que completes de 14 días te recompensa con Puntos Founder canjeables por beneficios futuros.\n"
-        "• 🛡️ **Reputación permanente:** Tu confiabilidad, puntualidad y cumplimiento quedan grabados de forma inmutable en la red.\n\n"
-        f"👤 **Tu estado actual:**\n"
+        "🤝 **Comunidad Test for Test (T4T)**\n\n"
+        "Apoyo voluntario mutuo entre desarrolladores y testers Android:\n\n"
+        "• 🆓 Publicar apps es 100% gratuito\n"
+        "• 🔄 Apoyas a otros y ellos apoyan tu app\n"
+        "• 🌟 Ganas **Puntos Founder** y reputación por cada prueba\n\n"
+        f"👤 **Tu estado:**\n"
         f"🌟 Puntos Founder: `{usuario.get('puntos_founder', 0)}`\n"
-        f"{rep_txt}\n\n"
-        "👉 Tocá **📱 Ver Apps** para explorar aplicaciones disponibles de la comunidad.",
+        f"🛡️ {rep_txt}\n\n"
+        "👉 Toca **📱 Ver Apps** para participar.",
         reply_markup=obtener_teclado_principal(user_id),
         parse_mode="Markdown"
     )
@@ -1307,34 +1270,20 @@ async def misapps(update: Update, context: ContextTypes.DEFAULT_TYPE):
             app = apps[app_id]
             prueba = app.get("pruebas", {}).get(user_id, {})
             estado_app = app.get("estado", "reclutando")
-            estado_prueba = prueba.get("estado", "Pendiente de captura")
-            fecha_inicio = prueba.get("fecha_inicio", "Sin iniciar")
+            min_t = app.get("min_testers", 15)
             dias = prueba.get("dias_completados", 0)
-            min_t = app.get("min_testers", 12)
-            registros = prueba.get("registros", {})
-            requiere_conc = prueba.get("requiere_conciliacion", False)
-
-            dias_puntuales = sum(1 for r in registros.values() if r.get("estado_entrega") == "puntual")
-            if requiere_conc:
-                dias_txt = f"Avance previo sin conciliar: `{dias}/14` (Requiere conciliación en 5D)"
-            elif registros:
-                dias_txt = f"Entregas puntualidad verificada: `{dias_puntuales}/14`"
-            else:
-                dias_txt = f"Progreso: `{dias}/14` días"
 
             if estado_app == "reclutando":
-                indicador = f"🟡 En lista de espera (esperando {min_t} testers)"
+                indicador = f"🟡 En espera ({len(app.get('testers', []))}/{min_t} testers)"
             elif estado_app == "lista":
-                indicador = "🟢 Lista para iniciar (esperando lanzamiento del Dev)"
+                indicador = "🟢 Lista para iniciar"
             else:
-                indicador = f"🚀 En prueba activa ({dias_txt})"
+                indicador = f"🚀 En prueba ({dias}/14 días)"
+
             mensaje += (
-                f"🔹 **{app.get('descripcion', 'Sin descripción')}**\n"
-                f"🔗 Link: {app.get('link')}\n"
-                f"📊 Estado campaña: {indicador}\n"
-                f"📌 Tu estado: `{estado_prueba}`\n"
-                f"📅 Fecha inicio: `{fecha_inicio}`\n"
-                f"🆔 ID: `{app_id}`\n\n"
+                f"📱 **{app.get('descripcion', 'App')}**\n"
+                f"📊 Estado: {indicador}\n"
+                f"🔗 {app.get('link')}\n\n"
             )
     await update.message.reply_text(mensaje, reply_markup=obtener_teclado_principal(user_id), parse_mode="Markdown")
 
@@ -1388,10 +1337,9 @@ async def ejecutar_avisos_1500(context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.send_message(
                         chat_id=tester_id,
                         text=(
-                            f"⏰ **RECORDATORIO TESTCOIN (15:00)** 📸\n\n"
-                            f"App: **{app.get('descripcion')}**\n"
-                            f"Tu entrega para la fecha `{cur_venc}` vence hoy a las **5:00 PM** (America/Mexico_City).\n"
-                            f"Por favor enviá tu captura de pantalla a tiempo."
+                            f"⏰ **Recordatorio (15:00)** 📸\n\n"
+                            f"📱 **{app.get('descripcion')}**\n"
+                            f"Recuerda enviar tu check-in antes de las **5:00 PM**."
                         ),
                         parse_mode="Markdown"
                     )
@@ -1422,10 +1370,9 @@ async def ejecutar_avisos_1630(context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.send_message(
                         chat_id=tester_id,
                         text=(
-                            f"🚨 **¡ÚLTIMO AVISO! RECORDATORIO (16:30)** ⚠️\n\n"
-                            f"App: **{app.get('descripcion')}**\n"
-                            f"Solo quedan 30 minutos para el corte de las **5:00 PM** (`{cur_venc}`).\n"
-                            f"¡Enviá tu captura ahora!"
+                            f"🚨 **¡Últimos 30 minutos! (16:30)** ⚠️\n\n"
+                            f"📱 **{app.get('descripcion')}**\n"
+                            f"Tu check-in vence a las **5:00 PM**. ¡Envíalo ahora!"
                         ),
                         parse_mode="Markdown"
                     )
@@ -1444,32 +1391,30 @@ async def miscampanas(update: Update, context: ContextTypes.DEFAULT_TYPE):
     apps = cargar_archivo(APPS_FILE)
     mis_apps = [(app_id, datos) for app_id, datos in apps.items() if datos.get("dev_id") == user_id]
     if not mis_apps:
-        await update.message.reply_text("📢 Aún no tenés campañas creadas. Publicá una tocando **🚀 Subir App**.", reply_markup=obtener_teclado_principal(user_id), parse_mode="Markdown")
+        await update.message.reply_text("📢 Aún no tienes campañas creadas. Publica una tocando **🚀 Subir App**.", reply_markup=obtener_teclado_principal(user_id), parse_mode="Markdown")
         return
-    mensaje = "📢 **Tus Campañas Publicadas:**\n\n"
+    mensaje = "📢 **Tus Campañas:**\n\n"
     for app_id, datos in mis_apps:
         num_testers = len(datos.get("testers", []))
-        min_testers = datos.get("min_testers", 12)
+        min_testers = datos.get("min_testers", 15)
         max_testers = datos.get("max_testers", min_testers)
         estado = datos.get("estado", "reclutando")
         pruebas_activas = len([p for p in datos.get("pruebas", {}).values() if p.get("estado") in ["instalada", "completada"]])
 
         if estado == "reclutando":
-            estado_txt = f"🟡 **En lista de espera** (`{num_testers}/{min_testers}` mín.)"
-            accion = f"💡 *Se notificará cuando se unan los {min_testers} testers.*"
+            estado_txt = f"🟡 Reclutando ({num_testers}/{min_testers} testers)"
+            accion = "⏳ Te avisaremos cuando se llene el cupo."
         elif estado == "lista":
-            estado_txt = f"🟢 **¡LISTA PARA INICIAR!** (`{num_testers}/{max_testers}` testers)"
-            accion = f"👉 **¡Lanzala ahora!** Escribí: `/iniciarprueba {app_id}`"
+            estado_txt = f"🟢 ¡Lista para iniciar! ({num_testers}/{max_testers} testers)"
+            accion = f"👉 Inicia ahora: `/iniciarprueba {app_id}`"
         else:
-            estado_txt = f"🚀 **En prueba activa** (`{pruebas_activas}` testers activos)"
-            accion = f"📅 Lanzada el `{datos.get('fecha_lanzamiento', 'Reciente')}`"
+            estado_txt = f"🚀 En prueba ({pruebas_activas} testers activos)"
+            accion = f"📅 Lanzada: {datos.get('fecha_lanzamiento', 'Reciente')}"
 
         mensaje += (
-            f"📱 **{datos.get('descripcion', 'Sin descripción')}**\n"
-            f"🔗 Link: {datos.get('link')}\n"
-            f"📊 Estado: {estado_txt}\n"
-            f"{accion}\n"
-            f"🆔 ID: `{app_id}`\n\n"
+            f"📱 **{datos.get('descripcion', 'App')}**\n"
+            f"📊 {estado_txt}\n"
+            f"{accion}\n\n"
         )
     await update.message.reply_text(mensaje, reply_markup=obtener_teclado_principal(user_id), parse_mode="Markdown")
 
@@ -1496,19 +1441,15 @@ async def miperfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await update.message.reply_text(
-        f"👤 **Perfil de Usuario — TestCoin**\n\n"
-        f"👤 **Nombre:** {usuario.get('nombre')}\n"
-        f"🆔 **ID:** `{user_id}`\n"
-        f"🏷️ **Rol:** {usuario.get('rol', 'Tester').capitalize()}\n\n"
+        f"👤 **Perfil de Usuario**\n\n"
+        f"👤 {usuario.get('nombre')} ({usuario.get('rol', 'Tester').capitalize()})\n\n"
         f"🌟 **Puntos Founder:** `{usuario.get('puntos_founder', 0)}` pts\n"
-        f"🪙 **Créditos tradicionales:** `{usuario.get('creditos', 0)}` créditos\n"
-        f"🎟️ **Boletos para Rifa Mensual:** `{usuario.get('boletos_rifa', 0)}`\n"
-        f"⚠️ **Advertencias recibidas:** `{usuario.get('advertencias', 0)}`\n\n"
-        f"🛡️ **Reputación Permanente:**\n{rep_txt}\n\n"
-        f"📊 **Estado de Participación:**\n"
+        f"🪙 **Créditos tradicionales:** `{usuario.get('creditos', 0)}`\n"
+        f"🎟️ Boletos rifa: `{usuario.get('boletos_rifa', 0)}`\n\n"
+        f"🛡️ **Reputación:**\n{rep_txt}\n\n"
+        f"📊 **Participación:**\n"
         f"• 📱 Apps activas testeando: `{apps_testeando}`\n"
-        f"• 🚀 Apps activas publicadas: `{apps_publicadas}`\n\n"
-        f"🤝 **Comunidad T4T:** Participá activamente con **📱 Ver Apps** para ganar Puntos Founder y mejorar tu reputación.",
+        f"• 🚀 Apps activas publicadas: `{apps_publicadas}`",
         reply_markup=obtener_teclado_principal(user_id),
         parse_mode="Markdown"
     )
@@ -1519,10 +1460,9 @@ async def comprarcreditos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "🆓 **Beta Gratuita Comunitaria Activa**\n\n"
             "Durante esta fase beta, **publicar tus aplicaciones es 100% gratuito**.\n\n"
-            "• No necesitás comprar créditos ni realizar ningún pago.\n"
-            "• El costo de publicación es de 🪙 **0 créditos** y $0 MXN.\n"
-            "• Podés subir tu app directamente con el botón **🚀 Subir App** o usando `/subirapp`.\n\n"
-            "🤝 Formamos una comunidad de apoyo mutuo (T4T) entre desarrolladores y testers Android.",
+            "• Costo de publicación: 🪙 **0 créditos** y $0 MXN.\n"
+            "• No necesitas comprar créditos ni pagar nada.\n\n"
+            "👉 Usa el botón **🚀 Subir App** o `/subirapp` para comenzar.",
             reply_markup=obtener_teclado_principal(user_id),
             parse_mode="Markdown"
         )
@@ -1530,14 +1470,8 @@ async def comprarcreditos(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         "💳 **Recarga de Créditos — TestCoin**\n\n"
-        "Si sos desarrollador y no querés probar apps de otros usuarios, podés comprar créditos directamente:\n\n"
-        "📦 **Paquete Campaña Completa:**\n"
-        "• 🪙 **800 Créditos** (Cubre 1 campaña con 15 testers por 14 días)\n"
-        "• 💰 **Precio:** $800 MXN\n\n"
-        "📲 **¿Cómo recargar?**\n"
-        "1. Realizá la solicitud enviando un mensaje al administrador.\n"
-        "2. Te proporcionaremos los datos de pago para activar tus créditos al instante.\n\n"
-        "📩 Contacto Soporte/Admin: `@AdminTestCoin`",
+        "🪙 **800 Créditos** = $800 MXN (1 campaña de 15 testers por 14 días)\n\n"
+        "📩 Contacta a soporte para recargar: `@AdminTestCoin`",
         reply_markup=obtener_teclado_principal(user_id),
         parse_mode="Markdown"
     )
@@ -2664,15 +2598,14 @@ async def mensaje_texto_generico(update: Update, context: ContextTypes.DEFAULT_T
 
     if "http://" in texto or "https://" in texto or "play.google.com" in texto:
         await update.message.reply_text(
-            "📌 **¡Hola! Detectamos que enviaste un enlace de Play Store.**\n\n"
-            "Para publicar tu aplicación en la Lista de Espera de TestCoin, por favor tocá el botón **🚀 Subir App**.",
+            "📱 **¿Quieres publicar esta app?**\n\n"
+            "Toca el botón **🚀 Subir App** para comenzar.",
             reply_markup=obtener_teclado_principal(user_id),
             parse_mode="Markdown"
         )
     else:
         await update.message.reply_text(
-            "🤖 **Menú Principal TestCoin**\n\n"
-            "Por favor usá los botones de abajo para navegar:",
+            "👋 Elige una opción del menú:",
             reply_markup=obtener_teclado_principal(user_id),
             parse_mode="Markdown"
         )
